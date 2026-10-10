@@ -19,4 +19,4 @@ class ModuloResponse(BaseModel):
     id: int
     nombre: str
     descripcion: str | None
-    activo: bool
+    estado: bool

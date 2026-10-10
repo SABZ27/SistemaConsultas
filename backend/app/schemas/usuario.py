@@ -36,5 +36,5 @@ class UsuarioResponse(BaseModel):
     rol: Rol
     programaId: int | None
     programaNombre: str | None
-    activo: bool
+    estado: bool
     fechaCreacion: datetime

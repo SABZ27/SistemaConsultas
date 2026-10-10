@@ -16,7 +16,7 @@ def solicitud_consulta_response(s: SolicitudConsulta) -> SolicitudConsultaRespon
         prioridad=s.prioridad,
         asunto=s.asunto,
         descripcion=s.descripcion,
-        fechaCreacion=s.fecha_creacion,
+        fechaCreacion=s.creado,
         fechaConsulta=s.fecha_consulta,
         horaConsulta=s.hora_consulta,
         estudianteId=estudiante.id,

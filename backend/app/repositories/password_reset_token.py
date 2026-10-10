@@ -11,15 +11,18 @@ class PasswordResetTokenRepository(RepoBase):
 
     def find_by_token(self, token: str) -> PasswordResetToken | None:
         return self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.token == token
+            PasswordResetToken.token == token,
+            PasswordResetToken.estado.is_(True),
         ).first()
 
     def find_by_usuario_id(self, usuario_id: int) -> PasswordResetToken | None:
         return self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.usuario_id == usuario_id
+            PasswordResetToken.usuario_id == usuario_id,
+            PasswordResetToken.estado.is_(True),
         ).first()
 
     def delete_by_usuario_id(self, usuario_id: int) -> None:
         self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.usuario_id == usuario_id
+            PasswordResetToken.usuario_id == usuario_id,
+            PasswordResetToken.estado.is_(True),
         ).delete()

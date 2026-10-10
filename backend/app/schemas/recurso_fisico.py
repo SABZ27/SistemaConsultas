@@ -23,4 +23,4 @@ class RecursoFisicoResponse(BaseModel):
     bloqueId: int
     bloqueNombre: str
     tipo: TipoRecursoFisico
-    activo: bool
+    estado: bool

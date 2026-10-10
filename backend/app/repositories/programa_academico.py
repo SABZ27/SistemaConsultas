@@ -12,17 +12,17 @@ class ProgramaAcademicoRepository(RepoBase):
     def find_by_id(self, id_: int) -> ProgramaAcademico | None:
         return self.db.get(ProgramaAcademico, id_)
 
-    def find_by_id_and_activo_true(self, id_: int) -> ProgramaAcademico | None:
+    def find_by_id_and_estado_true(self, id_: int) -> ProgramaAcademico | None:
         return self.db.query(ProgramaAcademico).filter(
-            ProgramaAcademico.id == id_, ProgramaAcademico.activo.is_(True)
+            ProgramaAcademico.id == id_, ProgramaAcademico.estado.is_(True)
         ).first()
 
-    def find_by_nombre_and_activo_true(self, nombre: str) -> ProgramaAcademico | None:
+    def find_by_nombre_and_estado_true(self, nombre: str) -> ProgramaAcademico | None:
         return self.db.query(ProgramaAcademico).filter(
-            ProgramaAcademico.nombre == nombre, ProgramaAcademico.activo.is_(True)
+            ProgramaAcademico.nombre == nombre, ProgramaAcademico.estado.is_(True)
         ).first()
 
-    def find_all_by_activo_true(self) -> list[ProgramaAcademico]:
+    def find_all_by_estado_true(self) -> list[ProgramaAcademico]:
         return self.db.query(ProgramaAcademico).filter(
-            ProgramaAcademico.activo.is_(True)
+            ProgramaAcademico.estado.is_(True)
         ).order_by(ProgramaAcademico.id).all()

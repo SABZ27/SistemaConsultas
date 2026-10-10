@@ -18,12 +18,12 @@ class RecursoFisicoService:
         self.bloque_repo = BloqueRepository(db)
 
     def registrar_recurso_fisico(self, req: RegistroRecursoFisicoRequest):
-        bloque = self.bloque_repo.find_by_id_and_activo_true(req.bloqueId)
+        bloque = self.bloque_repo.find_by_id_and_estado_true(req.bloqueId)
         if bloque is None:
             raise ResourceNotFoundException("No existe ese bloque.")
 
         if (
-            self.repo.find_by_nombre_and_bloque_and_activo_true(req.nombre, req.bloqueId)
+            self.repo.find_by_nombre_and_bloque_and_estado_true(req.nombre, req.bloqueId)
             is not None
         ):
             raise BadRequestException("Ya existe un RF con ese nombre en este bloque.")
@@ -39,22 +39,22 @@ class RecursoFisicoService:
     def listar_recursos_fisicos(self):
         return [
             recurso_fisico_response(r)
-            for r in self.repo.find_all_by_activo_true()
+            for r in self.repo.find_all_by_estado_true()
         ]
 
     def obtener_recurso_fisico_por_id(self, id_recurso: int):
-        recurso = self.repo.find_by_id_and_activo_true(id_recurso)
+        recurso = self.repo.find_by_id_and_estado_true(id_recurso)
         if recurso is None:
             raise ResourceNotFoundException("Recurso físico no encontrado.")
         return recurso_fisico_response(recurso)
 
     def actualizar_recurso_fisico(self, id_recurso: int, req: UpdateRecursoFisicoRequest):
-        recurso = self.repo.find_by_id_and_activo_true(id_recurso)
+        recurso = self.repo.find_by_id_and_estado_true(id_recurso)
         if recurso is None:
             raise ResourceNotFoundException("Recurso físico no encontrado.")
 
         if recurso.nombre != req.nombre:
-            recurso_existente = self.repo.find_by_nombre_and_bloque_and_activo_true(
+            recurso_existente = self.repo.find_by_nombre_and_bloque_and_estado_true(
                 req.nombre, recurso.bloque_id
             )
             if recurso_existente is not None and recurso_existente.id != recurso.id:
@@ -66,7 +66,7 @@ class RecursoFisicoService:
         return recurso_fisico_response(recurso)
 
     def eliminar_recurso_fisico(self, id_recurso: int) -> None:
-        recurso = self.repo.find_by_id_and_activo_true(id_recurso)
+        recurso = self.repo.find_by_id_and_estado_true(id_recurso)
         if recurso is None:
             raise ResourceNotFoundException("Recurso físico no encontrado.")
-        recurso.activo = False
+        recurso.estado = False

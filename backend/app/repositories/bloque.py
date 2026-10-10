@@ -13,19 +13,19 @@ class BloqueRepository(RepoBase):
     def find_by_id(self, id_: int) -> Bloque | None:
         return self.db.get(Bloque, id_)
 
-    def find_by_id_and_activo_true(self, id_: int) -> Bloque | None:
+    def find_by_id_and_estado_true(self, id_: int) -> Bloque | None:
         return self.db.query(Bloque).filter(
-            Bloque.id == id_, Bloque.activo.is_(True)
+            Bloque.id == id_, Bloque.estado.is_(True)
         ).first()
 
-    def find_by_nombre_and_sede_and_activo_true(self, nombre: str, sede_id: int) -> Bloque | None:
+    def find_by_nombre_and_sede_and_estado_true(self, nombre: str, sede_id: int) -> Bloque | None:
         return self.db.query(Bloque).filter(
             Bloque.nombre == nombre,
             Bloque.sede_id == sede_id,
-            Bloque.activo.is_(True),
+            Bloque.estado.is_(True),
         ).first()
 
-    def find_all_by_activo_true(self) -> list[Bloque]:
+    def find_all_by_estado_true(self) -> list[Bloque]:
         return self.db.query(Bloque).filter(
-            Bloque.activo.is_(True)
+            Bloque.estado.is_(True)
         ).order_by(Bloque.id).all()

@@ -20,7 +20,7 @@ from app.schemas.solicitud import (
 )
 from app.services.evento_solicitud import EventoSolicitudService
 from app.services.notificacion import NotificacionService
-from app.utils.numero_consulta import generar_numero_consulta
+from app.utils.numero_consulta import guardar_con_numero_unico
 from app.utils.seguridad import obtener_usuario_auth
 
 
@@ -45,7 +45,6 @@ class SolicitudConsultaService:
         modulo = self._obtener_modulo(req.moduloId)
 
         solicitud = SolicitudConsulta(
-            numero_consulta=generar_numero_consulta(self.repo),
             estado_consulta=EstadoSolicitud.PENDIENTE,
             prioridad=req.prioridad,
             asunto=req.asunto,
@@ -57,7 +56,7 @@ class SolicitudConsultaService:
             modulo=modulo,
             recurso_fisico=None,
         )
-        solicitud_guardada = self.repo.save(solicitud)
+        solicitud_guardada = guardar_con_numero_unico(self.repo, solicitud)
 
         self.notificacion_service.notificar_nueva_solicitud(solicitud_guardada)
         self.evento_service.nueva_solicitud(solicitud_guardada, estudiante)
@@ -165,7 +164,7 @@ class SolicitudConsultaService:
         return usuario
 
     def _obtener_docente(self, id_docente: int) -> Usuario:
-        usuario = self.user_repo.find_by_id_and_activo_true(id_docente)
+        usuario = self.user_repo.find_by_id_and_estado_true(id_docente)
         if usuario is None:
             raise ResourceNotFoundException("Docente no encontrado.")
         if usuario.rol != Rol.DOCENTE:
@@ -173,7 +172,7 @@ class SolicitudConsultaService:
         return usuario
 
     def _obtener_modulo(self, id_modulo: int):
-        modulo = self.modulo_repo.find_by_id_and_activo_true(id_modulo)
+        modulo = self.modulo_repo.find_by_id_and_estado_true(id_modulo)
         if modulo is None:
             raise ResourceNotFoundException("Módulo no encontrado.")
         return modulo
@@ -185,7 +184,7 @@ class SolicitudConsultaService:
         return solicitud
 
     def _obtener_recurso_fisico(self, id_recurso: int):
-        recurso = self.recurso_repo.find_by_id_and_activo_true(id_recurso)
+        recurso = self.recurso_repo.find_by_id_and_estado_true(id_recurso)
         if recurso is None:
             raise ResourceNotFoundException("Recurso físico no encontrado.")
         return recurso

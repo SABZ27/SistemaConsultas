@@ -29,7 +29,7 @@ def get_current_user(
     correo = _correo_desde_credenciales(credenciales)
     usuario = None
     if correo:
-        usuario = UsuarioRepository(db).find_by_correo_and_activo_true(correo)
+        usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
     if usuario is None:
         raise HTTPException(status_code=401, detail="No se encontró una sesión activa.")
     establecer_usuario_actual(usuario.correo)
@@ -43,7 +43,7 @@ def get_current_user_optional(
     correo = _correo_desde_credenciales(credenciales)
     usuario = None
     if correo:
-        usuario = UsuarioRepository(db).find_by_correo_and_activo_true(correo)
+        usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
     if usuario is not None:
         establecer_usuario_actual(usuario.correo)
     return usuario

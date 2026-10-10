@@ -9,5 +9,5 @@ def recurso_fisico_response(r: RecursoFisico) -> RecursoFisicoResponse:
         bloqueId=r.bloque_id,
         bloqueNombre=r.bloque.nombre,
         tipo=r.tipo,
-        activo=r.activo,
+        estado=r.estado,
     )

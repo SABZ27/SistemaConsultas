@@ -1,13 +1,13 @@
-from datetime import date, datetime, time
+from datetime import date, time
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, Time
+from sqlalchemy import Date, ForeignKey, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+from app.db.base import AuditoriaMixin, Base
 from app.models.enums import EstadoSolicitud, PrioridadSolicitud, columna_enum
 
 
-class SolicitudConsulta(Base):
+class SolicitudConsulta(AuditoriaMixin, Base):
     __tablename__ = "solicitudes_consultas"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -20,7 +20,6 @@ class SolicitudConsulta(Base):
     )
     asunto: Mapped[str] = mapped_column(String(200), nullable=False)
     descripcion: Mapped[str] = mapped_column(Text, nullable=False)
-    fecha_creacion: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
     fecha_consulta: Mapped[date] = mapped_column(Date, nullable=False)
     hora_consulta: Mapped[time] = mapped_column(Time, nullable=False)
     estudiante_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)

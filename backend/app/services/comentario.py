@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.exceptions.errors import BadRequestException, ResourceNotFoundException
@@ -39,7 +37,6 @@ class ComentarioService:
 
         comentario = Comentario(
             contenido=req.contenido,
-            fecha_creacion=datetime.now(),
             autor=autor,
             solicitudConsulta=consulta,
         )

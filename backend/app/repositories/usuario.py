@@ -12,38 +12,38 @@ class UsuarioRepository(RepoBase):
     def find_by_id(self, id_: int) -> Usuario | None:
         return self.db.get(Usuario, id_)
 
-    def find_by_id_and_activo_true(self, id_: int) -> Usuario | None:
+    def find_by_id_and_estado_true(self, id_: int) -> Usuario | None:
         return self.db.query(Usuario).filter(
-            Usuario.id == id_, Usuario.activo.is_(True)
+            Usuario.id == id_, Usuario.estado.is_(True)
         ).first()
 
     def find_by_correo(self, correo: str) -> Usuario | None:
         return self.db.query(Usuario).filter(Usuario.correo == correo).first()
 
-    def find_by_identificacion_and_activo_true(self, identificacion: str) -> Usuario | None:
+    def find_by_identificacion_and_estado_true(self, identificacion: str) -> Usuario | None:
         return self.db.query(Usuario).filter(
-            Usuario.identificacion == identificacion, Usuario.activo.is_(True)
+            Usuario.identificacion == identificacion, Usuario.estado.is_(True)
         ).first()
 
-    def find_by_correo_and_activo_true(self, correo: str) -> Usuario | None:
+    def find_by_correo_and_estado_true(self, correo: str) -> Usuario | None:
         return self.db.query(Usuario).filter(
-            Usuario.correo == correo, Usuario.activo.is_(True)
+            Usuario.correo == correo, Usuario.estado.is_(True)
         ).first()
 
     def find_by_identificacion(self, identificacion: str) -> Usuario | None:
         return self.db.query(Usuario).filter(Usuario.identificacion == identificacion).first()
 
-    def find_all_by_activo_true(self) -> list[Usuario]:
+    def find_all_by_estado_true(self) -> list[Usuario]:
         return self.db.query(Usuario).filter(
-            Usuario.activo.is_(True)
+            Usuario.estado.is_(True)
         ).order_by(Usuario.id).all()
 
-    def exists_by_identificacion_and_activo_true(self, identificacion: str) -> bool:
+    def exists_by_identificacion_and_estado_true(self, identificacion: str) -> bool:
         return self.db.query(Usuario.id).filter(
-            Usuario.identificacion == identificacion, Usuario.activo.is_(True)
+            Usuario.identificacion == identificacion, Usuario.estado.is_(True)
         ).first() is not None
 
-    def exists_by_correo_and_activo_true(self, correo: str) -> bool:
+    def exists_by_correo_and_estado_true(self, correo: str) -> bool:
         return self.db.query(Usuario.id).filter(
-            Usuario.correo == correo, Usuario.activo.is_(True)
+            Usuario.correo == correo, Usuario.estado.is_(True)
         ).first() is not None

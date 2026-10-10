@@ -19,4 +19,4 @@ class BloqueResponse(BaseModel):
     nombre: str
     sedeId: int
     sedeNombre: str
-    activo: bool
+    estado: bool

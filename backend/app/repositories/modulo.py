@@ -12,17 +12,17 @@ class ModuloRepository(RepoBase):
     def find_by_id(self, id_: int) -> Modulo | None:
         return self.db.get(Modulo, id_)
 
-    def find_by_id_and_activo_true(self, id_: int) -> Modulo | None:
+    def find_by_id_and_estado_true(self, id_: int) -> Modulo | None:
         return self.db.query(Modulo).filter(
-            Modulo.id == id_, Modulo.activo.is_(True)
+            Modulo.id == id_, Modulo.estado.is_(True)
         ).first()
 
-    def find_by_nombre_and_activo_true(self, nombre: str) -> Modulo | None:
+    def find_by_nombre_and_estado_true(self, nombre: str) -> Modulo | None:
         return self.db.query(Modulo).filter(
-            Modulo.nombre == nombre, Modulo.activo.is_(True)
+            Modulo.nombre == nombre, Modulo.estado.is_(True)
         ).first()
 
-    def find_all_by_activo_true(self) -> list[Modulo]:
+    def find_all_by_estado_true(self) -> list[Modulo]:
         return self.db.query(Modulo).filter(
-            Modulo.activo.is_(True)
+            Modulo.estado.is_(True)
         ).order_by(Modulo.id).all()

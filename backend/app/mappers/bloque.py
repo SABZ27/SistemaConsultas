@@ -8,5 +8,5 @@ def bloque_response(b: Bloque) -> BloqueResponse:
         nombre=b.nombre,
         sedeId=b.sede_id,
         sedeNombre=b.sede.nombre,
-        activo=b.activo,
+        estado=b.estado,
     )

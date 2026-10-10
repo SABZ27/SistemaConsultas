@@ -13,7 +13,7 @@ from tests.helpers import (
 def test_crud_programas(client):
     admin = crear_admin(client)
     prog = crear_programa(client, admin["token"])
-    assert prog["activo"] is True
+    assert prog["estado"] is True
     assert prog["nombre"]
 
     resp = client.post(
@@ -48,7 +48,7 @@ def test_crud_programas(client):
 def test_crud_modulos(client):
     admin = crear_admin(client)
     mod = crear_modulo(client, admin["token"])
-    assert mod["activo"] is True
+    assert mod["estado"] is True
 
     resp = client.put(
         f"/modulos/{mod['id']}",

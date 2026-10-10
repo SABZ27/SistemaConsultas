@@ -26,7 +26,7 @@ class AuthService:
         self.email_service = EmailService()
 
     def login(self, req: LoginRequest) -> LoginResponse:
-        usuario = self.user_repo.find_by_correo_and_activo_true(req.correo)
+        usuario = self.user_repo.find_by_correo_and_estado_true(req.correo)
         if usuario is None or not verify_password(req.password, usuario.password):
             raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos.")
         token = create_access_token(usuario.correo)
@@ -39,9 +39,9 @@ class AuthService:
         )
 
     def registro(self, req: RegistroUsuarioRequest) -> None:
-        if self.user_repo.find_by_correo_and_activo_true(req.correo) is not None:
+        if self.user_repo.find_by_correo_and_estado_true(req.correo) is not None:
             raise BadRequestException("El correo ya está registrado")
-        if self.user_repo.find_by_identificacion_and_activo_true(req.identificacion) is not None:
+        if self.user_repo.find_by_identificacion_and_estado_true(req.identificacion) is not None:
             raise BadRequestException("La identificación ya está registrada.")
 
         programa = None
@@ -58,12 +58,11 @@ class AuthService:
             password=hash_password(req.password),
             rol=req.rol,
             programa=programa,
-            activo=True,
         )
         self.user_repo.save(usuario)
 
     def forgot_password(self, req: ForgotPasswordRequest) -> None:
-        usuario = self.user_repo.find_by_correo_and_activo_true(req.correo)
+        usuario = self.user_repo.find_by_correo_and_estado_true(req.correo)
         if usuario is None:
             raise BadRequestException("No existe un usuario registrado con ese correo.")
 

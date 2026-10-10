@@ -22,7 +22,7 @@ def obtener_correo() -> str:
 
 def obtener_usuario_auth(db: Session) -> Usuario:
     correo = obtener_correo()
-    usuario = UsuarioRepository(db).find_by_correo_and_activo_true(correo)
+    usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
     if usuario is None:
         raise HTTPException(status_code=401, detail="No se encontró una sesión activa.")
     return usuario

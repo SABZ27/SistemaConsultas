@@ -15,11 +15,11 @@ class BloqueService:
         self.sede_repo = SedeRepository(db)
 
     def registrar_bloque(self, req: RegistroBloqueRequest):
-        sede = self.sede_repo.find_by_id_and_activo_true(req.sedeId)
+        sede = self.sede_repo.find_by_id_and_estado_true(req.sedeId)
         if sede is None:
             raise ResourceNotFoundException("La sede no existe.")
 
-        if self.repo.find_by_nombre_and_sede_and_activo_true(req.nombre, req.sedeId) is not None:
+        if self.repo.find_by_nombre_and_sede_and_estado_true(req.nombre, req.sedeId) is not None:
             raise BadRequestException("Ya existe un bloque con ese nombre en esta sede.")
 
         bloque = Bloque(nombre=req.nombre, sede=sede)
@@ -27,21 +27,21 @@ class BloqueService:
         return bloque_response(bloque)
 
     def listar_bloques(self):
-        return [bloque_response(b) for b in self.repo.find_all_by_activo_true()]
+        return [bloque_response(b) for b in self.repo.find_all_by_estado_true()]
 
     def obtener_bloque_por_id(self, id_bloque: int):
-        bloque = self.repo.find_by_id_and_activo_true(id_bloque)
+        bloque = self.repo.find_by_id_and_estado_true(id_bloque)
         if bloque is None:
             raise ResourceNotFoundException("Bloque no encontrado.")
         return bloque_response(bloque)
 
     def actualizar_bloque(self, id_bloque: int, req: UpdateBloqueRequest):
-        bloque = self.repo.find_by_id_and_activo_true(id_bloque)
+        bloque = self.repo.find_by_id_and_estado_true(id_bloque)
         if bloque is None:
             raise ResourceNotFoundException("Bloque no encontrado.")
 
         if bloque.nombre != req.nombre:
-            bloque_existente = self.repo.find_by_nombre_and_sede_and_activo_true(
+            bloque_existente = self.repo.find_by_nombre_and_sede_and_estado_true(
                 req.nombre, bloque.sede_id
             )
             if bloque_existente is not None and bloque_existente.id != bloque.id:
@@ -51,7 +51,7 @@ class BloqueService:
         return bloque_response(bloque)
 
     def eliminar_bloque(self, id_bloque: int) -> None:
-        bloque = self.repo.find_by_id_and_activo_true(id_bloque)
+        bloque = self.repo.find_by_id_and_estado_true(id_bloque)
         if bloque is None:
             raise ResourceNotFoundException("Bloque no encontrado.")
-        bloque.activo = False
+        bloque.estado = False

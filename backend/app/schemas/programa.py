@@ -16,4 +16,4 @@ class UpdateProgAcademicoRequest(BaseModel):
 class ProgAcademicoResponse(BaseModel):
     id: int
     nombre: str
-    activo: bool
+    estado: bool

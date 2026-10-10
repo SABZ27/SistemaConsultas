@@ -16,4 +16,4 @@ class UpdateSedeRequest(BaseModel):
 class SedeResponse(BaseModel):
     id: int
     nombre: str
-    activo: bool
+    estado: bool

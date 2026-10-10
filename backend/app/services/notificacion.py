@@ -24,7 +24,7 @@ class NotificacionService:
         self.email_service = EmailService()
 
     def _obtener_usuario(self, id_usuario: int) -> Usuario:
-        usuario = self.user_repo.find_by_id_and_activo_true(id_usuario)
+        usuario = self.user_repo.find_by_id_and_estado_true(id_usuario)
         if usuario is None:
             raise ResourceNotFoundException("Usuario no encontrado.")
         return usuario

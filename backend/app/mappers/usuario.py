@@ -13,8 +13,8 @@ def usuario_response(u: Usuario) -> UsuarioResponse:
         rol=u.rol,
         programaId=programa.id if programa else None,
         programaNombre=programa.nombre if programa else None,
-        activo=u.activo,
-        fechaCreacion=u.fecha_creacion,
+        estado=u.estado,
+        fechaCreacion=u.creado,
     )
 
 

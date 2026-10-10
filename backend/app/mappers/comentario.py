@@ -11,6 +11,6 @@ def comentario_response(c: Comentario) -> ComentarioResponse:
         consultaId=c.solicitud_id,
         numeroConsulta=c.solicitudConsulta.numero_consulta,
         contenido=c.contenido,
-        fechaCreacion=c.fecha_creacion,
+        fechaCreacion=c.creado,
         editado=c.editado,
     )

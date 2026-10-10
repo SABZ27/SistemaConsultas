@@ -3,4 +3,4 @@ from app.schemas.programa import ProgAcademicoResponse
 
 
 def programa_academico_response(p: ProgramaAcademico) -> ProgAcademicoResponse:
-    return ProgAcademicoResponse(id=p.id, nombre=p.nombre, activo=p.activo)
+    return ProgAcademicoResponse(id=p.id, nombre=p.nombre, estado=p.estado)

@@ -69,7 +69,7 @@ def crear_app() -> FastAPI:
 
                 db = SessionLocal()
                 try:
-                    usuario = UsuarioRepository(db).find_by_correo_and_activo_true(correo)
+                    usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
                 finally:
                     db.close()
                 if usuario is not None:
