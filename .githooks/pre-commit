@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Pre-commit: bloquea el commit de archivos de secretos .env
+# Se permite .env.example (plantillas de configuracion sin valores reales).
+
+if git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$' >/dev/null 2>&1; then
+    echo "ERROR: Se intento commitear un archivo .env (contiene secretos)." >&2
+    echo "Quitalo del indice (git rm --cached <ruta>) o renombralo como .env.example." >&2
+    exit 1
+fi
+
+exit 0
