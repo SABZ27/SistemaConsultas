@@ -12,7 +12,7 @@ class SolicitudConsulta(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     numero_consulta: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
-    estado: Mapped[EstadoSolicitud] = mapped_column(
+    estado_consulta: Mapped[EstadoSolicitud] = mapped_column(
         columna_enum(EstadoSolicitud), nullable=False, default=EstadoSolicitud.PENDIENTE
     )
     prioridad: Mapped[PrioridadSolicitud] = mapped_column(

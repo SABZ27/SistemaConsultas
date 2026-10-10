@@ -42,7 +42,7 @@ class EventoSolicitudService:
         self._registrar_evento(
             solicitud,
             usuario,
-            self._obtener_tipo_evento(solicitud.estado),
+            self._obtener_tipo_evento(solicitud.estado_consulta),
             self._obtener_contenido_descripcion(solicitud, usuario),
         )
 
@@ -93,20 +93,20 @@ class EventoSolicitudService:
     def _obtener_contenido_descripcion(
         self, solicitud: SolicitudConsulta, usuario: Usuario
     ) -> str:
-        if solicitud.estado == EstadoSolicitud.EN_PROCESO:
+        if solicitud.estado_consulta == EstadoSolicitud.EN_PROCESO:
             return (
                 f"EL docente {usuario.nombre} {usuario.apellido} "
                 "cambió el estado de la solicitud a EN_PROCESO.."
             )
-        if solicitud.estado == EstadoSolicitud.RESUELTA:
+        if solicitud.estado_consulta == EstadoSolicitud.RESUELTA:
             return (
                 f"El docente {usuario.nombre} {usuario.apellido} "
                 "cambió el estado de la consulta a RESUELTA."
             )
-        if solicitud.estado == EstadoSolicitud.CANCELADA:
+        if solicitud.estado_consulta == EstadoSolicitud.CANCELADA:
             return f"{usuario.nombre} {usuario.apellido} ha cancelado la solicitud de consulta."
-        if solicitud.estado == EstadoSolicitud.RECHAZADA:
+        if solicitud.estado_consulta == EstadoSolicitud.RECHAZADA:
             return f"{usuario.nombre} {usuario.apellido} ha rechazado la solicitud de consulta."
         raise BadRequestException(
-            f"No existe evento definido para el estado {solicitud.estado}"
+            f"No existe evento definido para el estado {solicitud.estado_consulta}"
         )

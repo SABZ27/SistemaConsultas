@@ -113,7 +113,7 @@ class NotificacionService:
         self, solicitud: SolicitudConsulta, destinatario: Usuario, motivo: str | None
     ) -> None:
         titulo, mensaje = self._obtener_contenido_notificacion(solicitud, motivo)
-        tipo_notificacion = self._obtener_tipo_notificacion(solicitud.estado)
+        tipo_notificacion = self._obtener_tipo_notificacion(solicitud.estado_consulta)
         self._armar_notificacion(
             destinatario.id,
             tipo_notificacion,
@@ -197,7 +197,7 @@ class NotificacionService:
     def _obtener_contenido_notificacion(
         self, solicitud: SolicitudConsulta, motivo: str | None
     ) -> tuple[str, str]:
-        if solicitud.estado == EstadoSolicitud.EN_PROCESO:
+        if solicitud.estado_consulta == EstadoSolicitud.EN_PROCESO:
             return (
                 "Solicitud aceptada",
                 (
@@ -207,7 +207,7 @@ class NotificacionService:
                     f"{solicitud.hora_consulta}."
                 ),
             )
-        if solicitud.estado == EstadoSolicitud.RECHAZADA:
+        if solicitud.estado_consulta == EstadoSolicitud.RECHAZADA:
             return (
                 "Solicitud rechazada",
                 (
@@ -215,7 +215,7 @@ class NotificacionService:
                     f"Motivo: {motivo}"
                 ),
             )
-        if solicitud.estado == EstadoSolicitud.CANCELADA:
+        if solicitud.estado_consulta == EstadoSolicitud.CANCELADA:
             return (
                 "Consulta cancelada",
                 (
@@ -223,11 +223,11 @@ class NotificacionService:
                     f"Motivo: {motivo}"
                 ),
             )
-        if solicitud.estado == EstadoSolicitud.RESUELTA:
+        if solicitud.estado_consulta == EstadoSolicitud.RESUELTA:
             return (
                 "Consulta resuelta",
                 f"La consulta {solicitud.numero_consulta} ha sido marcada como resuelta.",
             )
         raise BadRequestException(
-            f"No existe una notificación definida para el estado {solicitud.estado}."
+            f"No existe una notificación definida para el estado {solicitud.estado_consulta}."
         )

@@ -12,7 +12,7 @@ def solicitud_consulta_response(s: SolicitudConsulta) -> SolicitudConsultaRespon
     return SolicitudConsultaResponse(
         id=s.id,
         numeroConsulta=s.numero_consulta,
-        estado=s.estado,
+        estado=s.estado_consulta,
         prioridad=s.prioridad,
         asunto=s.asunto,
         descripcion=s.descripcion,

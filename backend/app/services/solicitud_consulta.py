@@ -46,7 +46,7 @@ class SolicitudConsultaService:
 
         solicitud = SolicitudConsulta(
             numero_consulta=generar_numero_consulta(self.repo),
-            estado=EstadoSolicitud.PENDIENTE,
+            estado_consulta=EstadoSolicitud.PENDIENTE,
             prioridad=req.prioridad,
             asunto=req.asunto,
             descripcion=req.descripcion,
@@ -129,10 +129,10 @@ class SolicitudConsultaService:
     def cambiar_estado(self, id_solicitud: int, req: CambiarEstadoSolicitudRequest):
         usuario_actual = obtener_usuario_auth(self.db)
         solicitud = self._obtener_solicitud(id_solicitud)
-        self._validar_cambio_estado(solicitud.estado, req.estado)
+        self._validar_cambio_estado(solicitud.estado_consulta, req.estado)
         self._validar_motivo(req.estado, req.motivo)
 
-        solicitud.estado = req.estado
+        solicitud.estado_consulta = req.estado
         solicitud_guardada = self.repo.save(solicitud)
         destinatario = self._obtener_destinatario(solicitud_guardada, usuario_actual)
 
@@ -198,7 +198,7 @@ class SolicitudConsultaService:
         raise BadRequestException("El usuario no pertenece a esta solicitud.")
 
     def _validar_estado(self, solicitud: SolicitudConsulta) -> bool:
-        return solicitud.estado in (EstadoSolicitud.EN_PROCESO, EstadoSolicitud.PENDIENTE)
+        return solicitud.estado_consulta in (EstadoSolicitud.EN_PROCESO, EstadoSolicitud.PENDIENTE)
 
     def _validar_motivo(self, estado: EstadoSolicitud, motivo: str | None) -> None:
         if estado in (EstadoSolicitud.RECHAZADA, EstadoSolicitud.CANCELADA):

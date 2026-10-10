@@ -16,9 +16,9 @@ class SolicitudConsultaRepository(RepoBase):
     def find_all(self) -> list[SolicitudConsulta]:
         return self.db.query(SolicitudConsulta).order_by(SolicitudConsulta.id).all()
 
-    def find_all_by_estado(self, estado: EstadoSolicitud) -> list[SolicitudConsulta]:
+    def find_all_by_estado(self, estado_consulta: EstadoSolicitud) -> list[SolicitudConsulta]:
         return self.db.query(SolicitudConsulta).filter(
-            SolicitudConsulta.estado == estado
+            SolicitudConsulta.estado_consulta == estado_consulta
         ).order_by(SolicitudConsulta.id).all()
 
     def find_all_by_estudiante_id(self, estudiante_id: int) -> list[SolicitudConsulta]:

@@ -104,4 +104,4 @@ class ComentarioService:
             raise BadRequestException("Solo puedes editar tus propios comentarios.")
 
     def _puede_comentar(self, consulta: SolicitudConsulta) -> bool:
-        return consulta.estado == EstadoSolicitud.EN_PROCESO
+        return consulta.estado_consulta == EstadoSolicitud.EN_PROCESO
