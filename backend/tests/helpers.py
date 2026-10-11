@@ -68,35 +68,6 @@ def crear_modulo(client, token, nombre=None):
     return resp.json()
 
 
-def crear_sede(client, token):
-    n = _next()
-    resp = client.post("/sedes", json={"nombre": f"Sede {n}"}, headers=auth(token))
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
-def crear_bloque(client, token, sede_id):
-    n = _next()
-    resp = client.post(
-        "/bloques",
-        json={"nombre": f"Bloque {n}", "sedeId": sede_id},
-        headers=auth(token),
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
-def crear_recurso(client, token, bloque_id):
-    n = _next()
-    resp = client.post(
-        "/recursos-fisicos",
-        json={"nombre": f"Recurso {n}", "tipo": "SALON", "bloqueId": bloque_id},
-        headers=auth(token),
-    )
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
 def crear_solicitud(
     client,
     token,

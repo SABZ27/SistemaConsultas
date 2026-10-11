@@ -10,7 +10,6 @@ from app.models.solicitud_consulta import SolicitudConsulta
 from app.models.usuario import Usuario
 from app.repositories.modulo import ModuloRepository
 from app.repositories.modulo_x_rol import ModuloXRolRepository
-from app.repositories.recurso_fisico import RecursoFisicoRepository
 from app.repositories.solicitud_consulta import SolicitudConsultaRepository
 from app.repositories.usuario import UsuarioRepository
 from app.schemas.solicitud import (
@@ -33,7 +32,6 @@ class SolicitudConsultaService:
         self.repo = SolicitudConsultaRepository(db)
         self.user_repo = UsuarioRepository(db)
         self.modulo_repo = ModuloRepository(db)
-        self.recurso_repo = RecursoFisicoRepository(db)
         self.notificacion_service = NotificacionService(db)
         self.evento_service = EventoSolicitudService(db)
         self.mxl_repo = ModuloXRolRepository(db)
@@ -58,7 +56,6 @@ class SolicitudConsultaService:
             estudiante=estudiante,
             docente=docente,
             modulo=modulo,
-            recurso_fisico=None,
         )
         solicitud_guardada = guardar_con_numero_unico(self.repo, solicitud)
 
@@ -140,6 +137,8 @@ class SolicitudConsultaService:
         id_solicitud: int,
         req: AsignarRecursoFisicoRequest,
         usuario_actual: Usuario,
+        infra_cliente,
+        token: str,
     ):
         solicitud = self._obtener_solicitud(id_solicitud)
 
@@ -154,7 +153,14 @@ class SolicitudConsultaService:
                 detail="Solo el docente asignado o un gestor pueden asignar recursos.",
             )
 
-        solicitud.recurso_fisico = self._obtener_recurso_fisico(req.recursoFisicoId)
+        recurso = infra_cliente.obtener_recurso_fisico(req.recursoFisicoId, token)
+        if recurso is None:
+            raise ResourceNotFoundException("Recurso físico no encontrado.")
+        if not recurso.get("estado", True):
+            raise BadRequestException("El recurso físico está inactivo.")
+
+        solicitud.recurso_fisico_id = recurso.get("id", req.recursoFisicoId)
+        solicitud.recurso_fisico_nombre = recurso.get("ubicacion") or recurso.get("nombre")
         solicitud_guardada = self.repo.save(solicitud)
 
         self.notificacion_service.notificar_asignacion_recurso(
@@ -248,12 +254,6 @@ class SolicitudConsultaService:
         if solicitud is None:
             raise ResourceNotFoundException("Solicitud no encontrada.")
         return solicitud
-
-    def _obtener_recurso_fisico(self, id_recurso: int):
-        recurso = self.recurso_repo.find_by_id_and_estado_true(id_recurso)
-        if recurso is None:
-            raise ResourceNotFoundException("Recurso físico no encontrado.")
-        return recurso
 
     def _obtener_destinatario(self, solicitud: SolicitudConsulta, usuario_actual: Usuario) -> Usuario:
         if usuario_actual.id == solicitud.estudiante_id:

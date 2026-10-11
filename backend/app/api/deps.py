@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.clients.infraestructura import InfraestructuraClient
 from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.usuario import Usuario
@@ -52,6 +53,17 @@ def get_current_user_optional(
     db: Session = Depends(get_db),
 ) -> Usuario | None:
     return _buscar_usuario(request, credenciales, db)
+
+
+def get_bearer_token(request: Request) -> str:
+    autorizacion = request.headers.get("authorization", "")
+    if not autorizacion.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="No se encontró una sesión activa.")
+    return autorizacion[7:].strip()
+
+
+def get_infra_cliente() -> InfraestructuraClient:
+    return InfraestructuraClient()
 
 
 def requiere_modulo(nombre_modulo: str):

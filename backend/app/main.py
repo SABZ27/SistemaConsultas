@@ -7,25 +7,27 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import (
     auth,
-    bloques,
     comentarios,
     modulos,
     modulos_sistema,
     notificaciones,
     programas,
-    recursos,
     roles,
-    sedes,
     solicitudes_consultas,
     usuarios,
 )
 from app.core.security import decode_token
 from app.db.session import init_db
-from app.exceptions.errors import BadRequestException, ResourceNotFoundException
+from app.exceptions.errors import (
+    BadRequestException,
+    ResourceNotFoundException,
+    ServiceUnavailableException,
+)
 from app.exceptions.handlers import (
     bad_request_exception_handler,
     http_exception_handler,
     resource_not_found_handler,
+    service_unavailable_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
@@ -69,6 +71,7 @@ def crear_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ResourceNotFoundException, resource_not_found_handler)
     app.add_exception_handler(BadRequestException, bad_request_exception_handler)
+    app.add_exception_handler(ServiceUnavailableException, service_unavailable_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
@@ -78,9 +81,6 @@ def crear_app() -> FastAPI:
     app.include_router(modulos_sistema.router)
     app.include_router(programas.router)
     app.include_router(modulos.router)
-    app.include_router(sedes.router)
-    app.include_router(bloques.router)
-    app.include_router(recursos.router)
     app.include_router(solicitudes_consultas.router)
     app.include_router(comentarios.router)
     app.include_router(notificaciones.router)

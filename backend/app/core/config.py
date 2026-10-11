@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     admin_password: str = ""
     admin_identificacion: str = ""
 
+    # Servicio de infraestructura (Express + MySQL)
+    infra_service_url: str = "http://localhost:3001"
+
     @property
     def database_url(self) -> str:
         if not self.db_url:

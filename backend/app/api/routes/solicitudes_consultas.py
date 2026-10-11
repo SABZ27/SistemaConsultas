@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_bearer_token, get_current_user, get_infra_cliente
 from app.db.session import get_db
 from app.schemas.solicitud import (
     AsignarRecursoFisicoRequest,
@@ -58,8 +58,12 @@ def asignar_recurso_fisico(
     req: AsignarRecursoFisicoRequest,
     db: Session = Depends(get_db),
     usuario=Depends(get_current_user),
+    token: str = Depends(get_bearer_token),
+    infra_cliente=Depends(get_infra_cliente),
 ):
-    return SolicitudConsultaService(db).asignar_recurso_fisico(id_solicitud, req, usuario)
+    return SolicitudConsultaService(db).asignar_recurso_fisico(
+        id_solicitud, req, usuario, infra_cliente, token
+    )
 
 
 @router.patch("/{id_solicitud}/estado", response_model=SolicitudConsultaResponse)

@@ -147,7 +147,7 @@ class NotificacionService:
             solicitud.id,
             "Recurso físico asignado",
             (
-                f"Se ha asignado el recurso {solicitud.recurso_fisico.nombre} para la consulta "
+                f"Se ha asignado el recurso {solicitud.recurso_fisico_nombre} para la consulta "
                 f"{solicitud.numero_consulta}.\n"
                 "Consulta los detalles de tu solicitud para conocer la información actualizada."
             ),

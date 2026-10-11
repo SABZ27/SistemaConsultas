@@ -55,14 +55,14 @@ class EventoSolicitudService:
         )
 
     def asignacion_recurso(self, solicitud: SolicitudConsulta, usuario: Usuario) -> None:
-        recurso = solicitud.recurso_fisico
-        if recurso is None:
+        nombre = solicitud.recurso_fisico_nombre
+        if not nombre:
             raise BadRequestException("La solicitud no tiene un recurso físico asignado.")
         self._registrar_evento(
             solicitud,
             usuario,
             TipoEvento.ASIGNACION_RECURSO,
-            f"{usuario.nombre} {usuario.apellido} asignó el recurso {recurso.nombre} a la consulta.",
+            f"{usuario.nombre} {usuario.apellido} asignó el recurso {nombre} a la consulta.",
         )
 
     def reasignacion(self, solicitud: SolicitudConsulta, usuario: Usuario) -> None:

@@ -3,10 +3,7 @@ from datetime import date, timedelta
 from tests.helpers import (
     auth,
     crear_admin,
-    crear_bloque,
     crear_modulo,
-    crear_recurso,
-    crear_sede,
     crear_solicitud,
     crear_usuario,
     mañana,
@@ -17,11 +14,8 @@ def _escenario_base(client):
     admin = crear_admin(client)
     docente = crear_usuario(client, rol="DOCENTE")
     estudiante = crear_usuario(client, rol="ESTUDIANTE")
-    sede = crear_sede(client, admin["token"])
-    bloque = crear_bloque(client, admin["token"], sede["id"])
-    recurso = crear_recurso(client, admin["token"], bloque["id"])
     modulo = crear_modulo(client, admin["token"])
-    return admin, docente, estudiante, sede, bloque, recurso, modulo
+    return admin, docente, estudiante, modulo
 
 
 def _poner_en_proceso(client, docente, sol_id):
@@ -34,7 +28,7 @@ def _poner_en_proceso(client, docente, sol_id):
 
 
 def test_flujo_solicitud_completo(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
 
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
@@ -62,7 +56,7 @@ def test_flujo_solicitud_completo(client):
 
 
 def test_crear_solicitud_sin_token(client):
-    _, docente, _, _, _, _, modulo = _escenario_base(client)
+    _, docente, _, modulo = _escenario_base(client)
     resp = client.post(
         "/solicitudes-consultas",
         json={
@@ -79,7 +73,7 @@ def test_crear_solicitud_sin_token(client):
 
 
 def test_crear_solicitud_docente_forbidden(client):
-    _, docente, _, _, _, _, modulo = _escenario_base(client)
+    _, docente, _, modulo = _escenario_base(client)
     resp = client.post(
         "/solicitudes-consultas",
         json={
@@ -98,7 +92,7 @@ def test_crear_solicitud_docente_forbidden(client):
 
 
 def test_crear_solicitud_docente_invalido(client):
-    _, _, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, _, estudiante, modulo = _escenario_base(client)
     resp = client.post(
         "/solicitudes-consultas",
         json={
@@ -118,7 +112,7 @@ def test_crear_solicitud_docente_invalido(client):
 
 
 def test_crear_solicitud_fecha_pasada(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     ayer = (date.today() - timedelta(days=1)).isoformat()
     resp = client.post(
         "/solicitudes-consultas",
@@ -141,7 +135,7 @@ def test_crear_solicitud_fecha_pasada(client):
 
 
 def test_crear_solicitud_modulo_invalido(client):
-    _, docente, estudiante, _, _, _, _ = _escenario_base(client)
+    _, docente, estudiante, _ = _escenario_base(client)
     resp = client.post(
         "/solicitudes-consultas",
         json={
@@ -160,7 +154,7 @@ def test_crear_solicitud_modulo_invalido(client):
 
 
 def test_cambiar_estado_flujo_estados(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -185,7 +179,7 @@ def test_cambiar_estado_flujo_estados(client):
 
 
 def test_cambiar_estado_no_participante(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -200,7 +194,7 @@ def test_cambiar_estado_no_participante(client):
 
 
 def test_cambiar_estado_mismo_estado(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -214,7 +208,7 @@ def test_cambiar_estado_mismo_estado(client):
 
 
 def test_cambiar_estado_motivo_obligatorio(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -235,60 +229,8 @@ def test_cambiar_estado_motivo_obligatorio(client):
     assert resp.json()["estado"] == "RECHAZADA"
 
 
-def test_asignar_recurso_manual(client):
-    _, docente, estudiante, _, _, recurso, modulo = _escenario_base(client)
-    sol = crear_solicitud(
-        client, estudiante["token"], docente["id_usuario"], modulo["id"]
-    )
-
-    resp = client.patch(
-        f"/solicitudes-consultas/{sol['id']}/recurso-fisico",
-        json={"recursoFisicoId": recurso["id"]},
-        headers=auth(docente["token"]),
-    )
-    assert resp.status_code == 200
-    assert resp.json()["recursoFisicoId"] == recurso["id"]
-    assert resp.json()["nombreRecursoFisico"] == recurso["nombre"]
-
-
-def test_asignar_recurso_estudiante_forbidden(client):
-    _, docente, estudiante, _, _, recurso, modulo = _escenario_base(client)
-    sol = crear_solicitud(
-        client, estudiante["token"], docente["id_usuario"], modulo["id"]
-    )
-
-    resp = client.patch(
-        f"/solicitudes-consultas/{sol['id']}/recurso-fisico",
-        json={"recursoFisicoId": recurso["id"]},
-        headers=auth(estudiante["token"]),
-    )
-    assert resp.status_code == 403
-    assert resp.json()["error"] == "Forbidden"
-
-
-def test_asignar_recurso_solicitud_resuelta(client):
-    _, docente, estudiante, _, _, recurso, modulo = _escenario_base(client)
-    sol = crear_solicitud(
-        client, estudiante["token"], docente["id_usuario"], modulo["id"]
-    )
-    _poner_en_proceso(client, docente, sol["id"])
-    client.patch(
-        f"/solicitudes-consultas/{sol['id']}/estado",
-        json={"estado": "RESUELTA"},
-        headers=auth(docente["token"]),
-    )
-
-    resp = client.patch(
-        f"/solicitudes-consultas/{sol['id']}/recurso-fisico",
-        json={"recursoFisicoId": recurso["id"]},
-        headers=auth(docente["token"]),
-    )
-    assert resp.status_code == 400
-    assert resp.json()["message"] == "No se puede asignar un recurso físico a esta consulta."
-
-
 def test_reasignar_docente(client):
-    admin, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    admin, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -305,7 +247,7 @@ def test_reasignar_docente(client):
 
 
 def test_reasignar_docente_estudiante_forbidden(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -321,7 +263,7 @@ def test_reasignar_docente_estudiante_forbidden(client):
 
 
 def test_reasignar_docente_no_docente(client):
-    admin, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    admin, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -337,7 +279,7 @@ def test_reasignar_docente_no_docente(client):
 
 
 def test_actualizar_solicitud_sin_motivo(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -362,7 +304,7 @@ def test_actualizar_solicitud_sin_motivo(client):
 
 
 def test_actualizar_solicitud_con_motivo(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -387,7 +329,7 @@ def test_actualizar_solicitud_con_motivo(client):
 
 
 def test_comentarios_flujo(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -432,7 +374,7 @@ def test_comentarios_flujo(client):
 
 
 def test_comentar_solicitud_pendiente_rechazado(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -447,7 +389,7 @@ def test_comentar_solicitud_pendiente_rechazado(client):
 
 
 def test_comentar_no_participante(client):
-    admin, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    admin, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -463,7 +405,7 @@ def test_comentar_no_participante(client):
 
 
 def test_notificaciones_flujo(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -498,7 +440,7 @@ def test_notificaciones_flujo(client):
 
 
 def test_marcar_notificacion_ajena(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    _, docente, estudiante, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -522,7 +464,7 @@ def test_marcar_notificacion_ajena(client):
 
 
 def test_estado_solicitud_404(client):
-    _, docente, _, _, _, _, _ = _escenario_base(client)
+    _, docente, _, _ = _escenario_base(client)
     resp = client.patch(
         "/solicitudes-consultas/99999/estado",
         json={"estado": "RESUELTA"},

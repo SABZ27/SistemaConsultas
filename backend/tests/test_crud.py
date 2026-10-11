@@ -1,11 +1,8 @@
 from tests.helpers import (
     auth,
     crear_admin,
-    crear_bloque,
     crear_modulo,
     crear_programa,
-    crear_recurso,
-    crear_sede,
     crear_usuario,
 )
 
@@ -75,51 +72,6 @@ def test_crud_modulos(client):
     resp = client.get("/modulos/99999", headers=auth(admin["token"]))
     assert resp.status_code == 404
     assert resp.json()["message"] == "Módulo no encontrado."
-
-
-def test_crud_sedes_bloques_recursos(client):
-    admin = crear_admin(client)
-    sede = crear_sede(client, admin["token"])
-    bloque = crear_bloque(client, admin["token"], sede["id"])
-    recurso = crear_recurso(client, admin["token"], bloque["id"])
-
-    assert bloque["sedeId"] == sede["id"]
-    assert bloque["sedeNombre"] == sede["nombre"]
-    assert recurso["bloqueId"] == bloque["id"]
-    assert recurso["bloqueNombre"] == bloque["nombre"]
-    assert recurso["tipo"] == "SALON"
-
-    resp = client.get("/bloques", headers=auth(admin["token"]))
-    assert resp.status_code == 200
-    assert any(b["id"] == bloque["id"] for b in resp.json())
-
-    resp = client.get("/recursos-fisicos", headers=auth(admin["token"]))
-    assert resp.status_code == 200
-    assert any(r["id"] == recurso["id"] for r in resp.json())
-
-    resp = client.put(
-        f"/recursos-fisicos/{recurso['id']}",
-        json={"nombre": "Recurso Renombrado"},
-        headers=auth(admin["token"]),
-    )
-    assert resp.status_code == 200
-    assert resp.json()["nombre"] == "Recurso Renombrado"
-
-    resp = client.delete(
-        f"/recursos-fisicos/{recurso['id']}", headers=auth(admin["token"])
-    )
-    assert resp.status_code == 204
-
-    resp = client.get("/recursos-fisicos/99999", headers=auth(admin["token"]))
-    assert resp.status_code == 404
-    assert resp.json()["message"] == "Recurso físico no encontrado."
-
-    resp = client.get("/bloques/99999", headers=auth(admin["token"]))
-    assert resp.status_code == 404
-    assert resp.json()["message"] == "Bloque no encontrado."
-
-    resp = client.delete(f"/bloques/{bloque['id']}", headers=auth(admin["token"]))
-    assert resp.status_code == 204
 
 
 def test_rutas_sin_token(client):

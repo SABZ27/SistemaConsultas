@@ -6,9 +6,6 @@ from app.models.usuario import Usuario
 from app.models.modulo import Modulo
 from app.models.modulo_sistema import ModuloSistema
 from app.models.modulo_x_rol import ModuloXRol
-from app.models.sede import Sede
-from app.models.bloque import Bloque
-from app.models.recurso_fisico import RecursoFisico
 from app.models.solicitud_consulta import SolicitudConsulta
 from app.models.comentario import Comentario
 from app.models.evento_solicitud import EventoSolicitud
@@ -23,9 +20,6 @@ __all__ = [
     "Modulo",
     "ModuloSistema",
     "ModuloXRol",
-    "Sede",
-    "Bloque",
-    "RecursoFisico",
     "SolicitudConsulta",
     "Comentario",
     "EventoSolicitud",

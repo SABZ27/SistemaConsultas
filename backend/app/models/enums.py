@@ -23,14 +23,6 @@ class PrioridadSolicitud(str, PyEnum):
     BAJA = "BAJA"
 
 
-class TipoRecursoFisico(str, PyEnum):
-    SALON = "SALON"
-    LABORATORIO = "LABORATORIO"
-    AUDITORIO = "AUDITORIO"
-    SALA = "SALA"
-    OFICINA = "OFICINA"
-
-
 class TipoNotificacion(str, PyEnum):
     NUEVA_SOLICITUD = "NUEVA_SOLICITUD"
     CAMBIO_ESTADO = "CAMBIO_ESTADO"

@@ -25,11 +25,16 @@ class SolicitudConsulta(AuditoriaMixin, Base):
     estudiante_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     docente_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     modulo_id: Mapped[int] = mapped_column(ForeignKey("modulos.id"), nullable=False)
-    recurso_fisico_id: Mapped[int | None] = mapped_column(ForeignKey("recursos_fisicos.id"), nullable=True)
+    # Recurso físico asignado: decisión deliberada de NO mantener una FK hacia el
+    # microservicio de infraestructura (Express + MySQL). Se guarda el id sin
+    # integridad referencial y una copia de la ubicación completa al asignar,
+    # para no llamar al servicio al listar y conservar el historial ("Salón 3"
+    # solo es ambiguo entre sedes). Ver Fase 4.
+    recurso_fisico_id: Mapped[int | None] = mapped_column(nullable=True)
+    recurso_fisico_nombre: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     estudiante: Mapped["Usuario"] = relationship(foreign_keys=[estudiante_id], backref="solicitudes_estudiante")
     docente: Mapped["Usuario"] = relationship(foreign_keys=[docente_id], backref="solicitudes_docente")
     modulo: Mapped["Modulo"] = relationship(back_populates="solicitudes")
-    recurso_fisico: Mapped["RecursoFisico | None"] = relationship(back_populates="solicitudes")
     comentarios: Mapped[list["Comentario"]] = relationship(back_populates="solicitudConsulta")
     eventos: Mapped[list["EventoSolicitud"]] = relationship(back_populates="solicitud")

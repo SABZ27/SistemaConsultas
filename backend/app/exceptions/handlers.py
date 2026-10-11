@@ -5,7 +5,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.exceptions.errors import BadRequestException, ResourceNotFoundException
+from app.exceptions.errors import (
+    BadRequestException,
+    ResourceNotFoundException,
+    ServiceUnavailableException,
+)
 from app.schemas.mensajes import etiqueta_campo
 
 logger = logging.getLogger("sistema_consultas")
@@ -19,6 +23,7 @@ NOMBRE_ERROR = {
     409: "Conflict",
     422: "Unprocessable Entity",
     500: "Internal Server Error",
+    503: "Service Unavailable",
 }
 
 
@@ -112,6 +117,13 @@ def bad_request_exception_handler(_request, exc: BadRequestException) -> JSONRes
     return JSONResponse(
         status_code=400,
         content=_cuerpo(400, exc.message or "Solicitud inválida."),
+    )
+
+
+def service_unavailable_handler(_request, exc: ServiceUnavailableException) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content=_cuerpo(503, exc.message or "Servicio no disponible."),
     )
 
 

@@ -7,7 +7,6 @@ def solicitud_consulta_response(s: SolicitudConsulta) -> SolicitudConsultaRespon
     estudiante = s.estudiante
     docente = s.docente
     modulo = s.modulo
-    recurso = s.recurso_fisico
     programa = estudiante.programa if estudiante else None
     return SolicitudConsultaResponse(
         id=s.id,
@@ -28,6 +27,6 @@ def solicitud_consulta_response(s: SolicitudConsulta) -> SolicitudConsultaRespon
         moduloId=modulo.id,
         nombreModulo=modulo.nombre,
         nombrePrograma=programa.nombre if programa else "Sin programa",
-        recursoFisicoId=recurso.id if recurso else None,
-        nombreRecursoFisico=recurso.nombre if recurso else "Sin asignar",
+        recursoFisicoId=s.recurso_fisico_id,
+        nombreRecursoFisico=s.recurso_fisico_nombre or "Sin asignar",
     )
