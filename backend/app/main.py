@@ -10,9 +10,11 @@ from app.api.routes import (
     bloques,
     comentarios,
     modulos,
+    modulos_sistema,
     notificaciones,
     programas,
     recursos,
+    roles,
     sedes,
     solicitudes_consultas,
     usuarios,
@@ -51,29 +53,17 @@ def crear_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    from app.repositories.usuario import UsuarioRepository
-    from app.utils.seguridad import establecer_usuario_actual
-
     @app.middleware("http")
-    async def _establecer_usuario_actual(_request, call_next):
+    async def _inyectar_correo_autenticado(_request, call_next):
         authorization = _request.headers.get("authorization", "")
+        correo = None
         if authorization.lower().startswith("bearer "):
             token = authorization[7:].strip()
-            correo = None
             try:
                 correo = decode_token(token)
             except Exception:
                 correo = None
-            if correo:
-                from app.db.session import SessionLocal
-
-                db = SessionLocal()
-                try:
-                    usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
-                finally:
-                    db.close()
-                if usuario is not None:
-                    establecer_usuario_actual(usuario.correo)
+        _request.state.usuario_correo = correo
         return await call_next(_request)
 
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -84,6 +74,8 @@ def crear_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(usuarios.router)
+    app.include_router(roles.router)
+    app.include_router(modulos_sistema.router)
     app.include_router(programas.router)
     app.include_router(modulos.router)
     app.include_router(sedes.router)

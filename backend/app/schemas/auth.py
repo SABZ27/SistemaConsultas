@@ -15,6 +15,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ModuloInfo(BaseModel):
+    nombre: str
+    ruta: str | None
+    icono: str | None
+
+
 class LoginResponse(BaseModel):
     token: str
     id_usuario: int
@@ -22,6 +28,16 @@ class LoginResponse(BaseModel):
     nombre: str
     rol: Rol
     tipo: str = "Bearer"
+    modulos: list[ModuloInfo]
+
+
+class MeResponse(BaseModel):
+    id: int
+    identificacion: str
+    correo: str
+    nombre: str
+    rol: Rol
+    modulos: list[ModuloInfo]
 
 
 class ForgotPasswordRequest(BaseModel):

@@ -54,6 +54,11 @@ def init_db() -> None:
         Base.metadata.create_all(bind=engine)
         if engine.dialect.name == "postgresql":
             _crear_triggers_actualizado_postgres()
+        from app.db.seeds import ejecutar_seeds
+
+        with SessionLocal() as db:
+            ejecutar_seeds(db)
+            db.commit()
         logger.info("Esquema verificado/creado correctamente en la base de datos.")
     except Exception as exc:  # pragma: no cover
         logger.warning("No se pudo conectar a la base de datos (%s). Verifica DB_URL y que Neon esté activo.", type(exc).__name__)

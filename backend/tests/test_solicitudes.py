@@ -48,7 +48,9 @@ def test_flujo_solicitud_completo(client):
     assert sol["docenteId"] == docente["id_usuario"]
     assert sol["estudianteId"] == estudiante["id_usuario"]
 
-    resp = client.get("/solicitudes-consultas")
+    resp = client.get(
+        "/solicitudes-consultas", headers=auth(estudiante["token"])
+    )
     assert resp.status_code == 200
     assert len(resp.json()) == 1
 
@@ -182,18 +184,19 @@ def test_cambiar_estado_flujo_estados(client):
     assert resp.json()["estado"] == "RESUELTA"
 
 
-def test_cambiar_estado_requiere_participante(client):
-    admin, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+def test_cambiar_estado_no_participante(client):
+    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
+    otro = crear_usuario(client, rol="ESTUDIANTE")
     resp = client.patch(
         f"/solicitudes-consultas/{sol['id']}/estado",
         json={"estado": "EN_PROCESO"},
-        headers=auth(admin["token"]),
+        headers=auth(otro["token"]),
     )
-    assert resp.status_code == 400
-    assert resp.json()["message"] == "El usuario no pertenece a esta solicitud."
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "Forbidden"
 
 
 def test_cambiar_estado_mismo_estado(client):
@@ -241,11 +244,26 @@ def test_asignar_recurso_manual(client):
     resp = client.patch(
         f"/solicitudes-consultas/{sol['id']}/recurso-fisico",
         json={"recursoFisicoId": recurso["id"]},
-        headers=auth(estudiante["token"]),
+        headers=auth(docente["token"]),
     )
     assert resp.status_code == 200
     assert resp.json()["recursoFisicoId"] == recurso["id"]
     assert resp.json()["nombreRecursoFisico"] == recurso["nombre"]
+
+
+def test_asignar_recurso_estudiante_forbidden(client):
+    _, docente, estudiante, _, _, recurso, modulo = _escenario_base(client)
+    sol = crear_solicitud(
+        client, estudiante["token"], docente["id_usuario"], modulo["id"]
+    )
+
+    resp = client.patch(
+        f"/solicitudes-consultas/{sol['id']}/recurso-fisico",
+        json={"recursoFisicoId": recurso["id"]},
+        headers=auth(estudiante["token"]),
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "Forbidden"
 
 
 def test_asignar_recurso_solicitud_resuelta(client):
@@ -263,13 +281,30 @@ def test_asignar_recurso_solicitud_resuelta(client):
     resp = client.patch(
         f"/solicitudes-consultas/{sol['id']}/recurso-fisico",
         json={"recursoFisicoId": recurso["id"]},
-        headers=auth(estudiante["token"]),
+        headers=auth(docente["token"]),
     )
     assert resp.status_code == 400
     assert resp.json()["message"] == "No se puede asignar un recurso físico a esta consulta."
 
 
 def test_reasignar_docente(client):
+    admin, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    sol = crear_solicitud(
+        client, estudiante["token"], docente["id_usuario"], modulo["id"]
+    )
+
+    nuevo_docente = crear_usuario(client, rol="DOCENTE")
+    resp = client.patch(
+        f"/solicitudes-consultas/{sol['id']}/docente",
+        json={"docenteId": nuevo_docente["id_usuario"]},
+        headers=auth(admin["token"]),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["docenteId"] == nuevo_docente["id_usuario"]
+    assert resp.json()["nombreCompletoDocente"] == nuevo_docente["nombre"]
+
+
+def test_reasignar_docente_estudiante_forbidden(client):
     _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
@@ -281,13 +316,12 @@ def test_reasignar_docente(client):
         json={"docenteId": nuevo_docente["id_usuario"]},
         headers=auth(estudiante["token"]),
     )
-    assert resp.status_code == 200
-    assert resp.json()["docenteId"] == nuevo_docente["id_usuario"]
-    assert resp.json()["nombreCompletoDocente"] == nuevo_docente["nombre"]
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "Forbidden"
 
 
 def test_reasignar_docente_no_docente(client):
-    _, docente, estudiante, _, _, _, modulo = _escenario_base(client)
+    admin, docente, estudiante, _, _, _, modulo = _escenario_base(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )
@@ -296,7 +330,7 @@ def test_reasignar_docente_no_docente(client):
     resp = client.patch(
         f"/solicitudes-consultas/{sol['id']}/docente",
         json={"docenteId": otro_estudiante["id_usuario"]},
-        headers=auth(estudiante["token"]),
+        headers=auth(admin["token"]),
     )
     assert resp.status_code == 400
     assert resp.json()["message"] == "El usuario indicado no tiene el rol DOCENTE."

@@ -38,6 +38,35 @@ class UsuarioRepository(RepoBase):
             Usuario.estado.is_(True)
         ).order_by(Usuario.id).all()
 
+    def find_all(self) -> list[Usuario]:
+        return self.db.query(Usuario).order_by(Usuario.id).all()
+
+    def find_docentes_activos(self) -> list[Usuario]:
+        from app.models.enums import Rol
+        from app.models.rol import Rol as RolEntidad
+
+        return (
+            self.db.query(Usuario)
+            .join(RolEntidad, RolEntidad.id == Usuario.rol_id)
+            .filter(
+                Usuario.estado.is_(True),
+                RolEntidad.nombre == Rol.DOCENTE.value,
+            )
+            .order_by(Usuario.id)
+            .all()
+        )
+
+    def find_admin_activo(self) -> Usuario | None:
+        from app.models.enums import Rol
+        from app.models.rol import Rol as RolEntidad
+
+        return (
+            self.db.query(Usuario)
+            .join(RolEntidad, RolEntidad.id == Usuario.rol_id)
+            .filter(RolEntidad.nombre == Rol.ADMINISTRADOR.value)
+            .first()
+        )
+
     def exists_by_identificacion_and_estado_true(self, identificacion: str) -> bool:
         return self.db.query(Usuario.id).filter(
             Usuario.identificacion == identificacion, Usuario.estado.is_(True)

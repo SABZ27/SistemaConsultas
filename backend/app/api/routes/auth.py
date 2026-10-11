@@ -1,12 +1,27 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.schemas.auth import ForgotPasswordRequest, LoginRequest, LoginResponse, ResetPasswordRequest
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    LoginResponse,
+    MeResponse,
+    ResetPasswordRequest,
+)
 from app.schemas.usuario import RegistroUsuarioRequest
 from app.services.auth import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+@router.get("/me", response_model=MeResponse)
+def mi_perfil(
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+) -> MeResponse:
+    return AuthService(db).mi_perfil(usuario)
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)

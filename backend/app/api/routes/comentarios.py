@@ -17,27 +17,29 @@ router = APIRouter(prefix="/comentarios", tags=["Comentarios"])
 def registrar_comentario(
     req: RegistroComentarioRequest,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user),
 ):
-    return ComentarioService(db).registrar(req)
+    return ComentarioService(db).registrar(req, usuario)
 
 
 @router.get("/solicitud/{solicitud_consulta_id}", response_model=list[ComentarioResponse])
 def listar_comentarios_solicitud(
     solicitud_consulta_id: int,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user),
 ):
-    return ComentarioService(db).listar_comentarios_por_solicitud(solicitud_consulta_id)
+    return ComentarioService(db).listar_comentarios_por_solicitud(
+        solicitud_consulta_id, usuario
+    )
 
 
 @router.get("/{id_comentario}", response_model=ComentarioResponse)
 def obtener_comentario(
     id_comentario: int,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user),
 ):
-    return ComentarioService(db).obtener_comentario_por_id(id_comentario)
+    return ComentarioService(db).obtener_comentario_por_id(id_comentario, usuario)
 
 
 @router.put("/{id_comentario}", response_model=ComentarioResponse)
@@ -45,6 +47,15 @@ def actualizar_comentario(
     id_comentario: int,
     req: UpdateComentarioRequest,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user),
 ):
-    return ComentarioService(db).actualizar(id_comentario, req)
+    return ComentarioService(db).actualizar(id_comentario, req, usuario)
+
+
+@router.delete("/{id_comentario}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_comentario(
+    id_comentario: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    ComentarioService(db).eliminar(id_comentario, usuario)

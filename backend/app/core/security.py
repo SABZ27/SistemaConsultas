@@ -17,11 +17,14 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(correo: str, uid: int, rol: str, modulos: list[str]) -> str:
     ahora = dt.datetime.now(dt.timezone.utc)
     expiracion = ahora + dt.timedelta(minutes=settings.jwt_expiration_minutes)
     payload = {
-        "sub": subject,
+        "sub": correo,
+        "uid": uid,
+        "rol": rol,
+        "modulos": modulos,
         "iat": ahora,
         "exp": expiracion,
     }

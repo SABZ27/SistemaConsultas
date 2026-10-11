@@ -22,7 +22,7 @@ def test_crud_programas(client):
     assert resp.status_code == 400
     assert resp.json()["message"] == "Ya existe un programa académico con ese nombre."
 
-    resp = client.get("/programas")
+    resp = client.get("/programas", headers=auth(admin["token"]))
     assert resp.status_code == 200
     assert any(p["id"] == prog["id"] for p in resp.json())
 
@@ -37,7 +37,7 @@ def test_crud_programas(client):
     resp = client.delete(f"/programas/{prog['id']}", headers=auth(admin["token"]))
     assert resp.status_code == 204
 
-    resp = client.get("/programas")
+    resp = client.get("/programas", headers=auth(admin["token"]))
     assert all(p["id"] != prog["id"] for p in resp.json())
 
     resp = client.get("/programas/99999", headers=auth(admin["token"]))
@@ -128,12 +128,12 @@ def test_rutas_sin_token(client):
     assert resp.json()["error"] == "Unauthorized"
 
 
-def test_crear_programa_estudiante_permitido(client):
+def test_crear_programa_estudiante_forbidden(client):
     estudiante = crear_usuario(client)
     resp = client.post(
         "/programas",
         json={"nombre": "Programa estudiante"},
         headers=auth(estudiante["token"]),
     )
-    assert resp.status_code == 201
-    assert resp.json()["nombre"] == "Programa estudiante"
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "Forbidden"

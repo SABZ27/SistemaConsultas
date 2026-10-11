@@ -38,3 +38,9 @@ class UsuarioResponse(BaseModel):
     programaNombre: str | None
     estado: bool
     fechaCreacion: datetime
+
+
+class DocenteResumen(BaseModel):
+    id: int
+    nombre: str
+    apellido: str

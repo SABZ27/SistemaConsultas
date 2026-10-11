@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_current_user_optional
+from app.api.deps import get_current_user, requiere_modulo
 from app.db.session import get_db
 from app.schemas.programa import (
     ProgAcademicoResponse,
@@ -10,13 +10,15 @@ from app.schemas.programa import (
 )
 from app.services.programa_academico import ProgramaAcademicoService
 
+NOMBRE_MODULO = "PROGRAMAS_ASIGNATURAS"
+
 router = APIRouter(prefix="/programas", tags=["Programas Académicos"])
 
 
 @router.get("", response_model=list[ProgAcademicoResponse])
 def listar_programas(
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user_optional),
+    _usuario=Depends(get_current_user),
 ):
     return ProgramaAcademicoService(db).listar_programas()
 
@@ -25,7 +27,7 @@ def listar_programas(
 def crear_programa(
     req: RegistroProgAcademicoRequest,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
 ):
     return ProgramaAcademicoService(db).registrar_programa(req)
 
@@ -44,7 +46,7 @@ def actualizar_programa(
     id_programa: int,
     req: UpdateProgAcademicoRequest,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
 ):
     return ProgramaAcademicoService(db).actualizar_programa(id_programa, req)
 
@@ -53,6 +55,6 @@ def actualizar_programa(
 def eliminar_programa(
     id_programa: int,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
 ):
     ProgramaAcademicoService(db).eliminar_programa(id_programa)

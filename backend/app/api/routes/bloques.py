@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, requiere_modulo
 from app.db.session import get_db
 from app.schemas.bloque import (
     BloqueResponse,
@@ -10,16 +10,9 @@ from app.schemas.bloque import (
 )
 from app.services.bloque import BloqueService
 
+NOMBRE_MODULO = "INFRAESTRUCTURA"
+
 router = APIRouter(prefix="/bloques", tags=["Bloques"])
-
-
-@router.post("", response_model=BloqueResponse, status_code=status.HTTP_201_CREATED)
-def crear_bloque(
-    req: RegistroBloqueRequest,
-    db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
-):
-    return BloqueService(db).registrar_bloque(req)
 
 
 @router.get("", response_model=list[BloqueResponse])
@@ -28,6 +21,15 @@ def listar_bloques(
     _usuario=Depends(get_current_user),
 ):
     return BloqueService(db).listar_bloques()
+
+
+@router.post("", response_model=BloqueResponse, status_code=status.HTTP_201_CREATED)
+def crear_bloque(
+    req: RegistroBloqueRequest,
+    db: Session = Depends(get_db),
+    _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
+):
+    return BloqueService(db).registrar_bloque(req)
 
 
 @router.get("/{id_bloque}", response_model=BloqueResponse)
@@ -44,7 +46,7 @@ def actualizar_bloque(
     id_bloque: int,
     req: UpdateBloqueRequest,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
 ):
     return BloqueService(db).actualizar_bloque(id_bloque, req)
 
@@ -53,6 +55,6 @@ def actualizar_bloque(
 def eliminar_bloque(
     id_bloque: int,
     db: Session = Depends(get_db),
-    _usuario=Depends(get_current_user),
+    _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
 ):
     BloqueService(db).eliminar_bloque(id_bloque)

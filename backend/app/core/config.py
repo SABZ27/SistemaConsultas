@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     jwt_secret: str = "REEMPLAZAR_POR_UN_SECRET_DE_AL_MENOS_32_CARACTERES"
     jwt_expiration_minutes: int = 30
 
+    # Administrador inicial (semilla)
+    admin_correo: str = ""
+    admin_password: str = ""
+    admin_identificacion: str = ""
+
     @property
     def database_url(self) -> str:
         if not self.db_url:

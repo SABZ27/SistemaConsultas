@@ -1,5 +1,6 @@
 from datetime import date
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.exceptions.errors import BadRequestException, ResourceNotFoundException
@@ -8,6 +9,7 @@ from app.models.enums import EstadoSolicitud, Rol
 from app.models.solicitud_consulta import SolicitudConsulta
 from app.models.usuario import Usuario
 from app.repositories.modulo import ModuloRepository
+from app.repositories.modulo_x_rol import ModuloXRolRepository
 from app.repositories.recurso_fisico import RecursoFisicoRepository
 from app.repositories.solicitud_consulta import SolicitudConsultaRepository
 from app.repositories.usuario import UsuarioRepository
@@ -21,7 +23,8 @@ from app.schemas.solicitud import (
 from app.services.evento_solicitud import EventoSolicitudService
 from app.services.notificacion import NotificacionService
 from app.utils.numero_consulta import guardar_con_numero_unico
-from app.utils.seguridad import obtener_usuario_auth
+
+NOMBRE_MODULO_GESTION = "GESTION_SOLICITUDES"
 
 
 class SolicitudConsultaService:
@@ -33,14 +36,15 @@ class SolicitudConsultaService:
         self.recurso_repo = RecursoFisicoRepository(db)
         self.notificacion_service = NotificacionService(db)
         self.evento_service = EventoSolicitudService(db)
+        self.mxl_repo = ModuloXRolRepository(db)
 
-    def registrar(self, req: RegistroSolicitudConsultaRequest):
+    def registrar(self, req: RegistroSolicitudConsultaRequest, usuario_actual: Usuario):
         if req.fechaConsulta < date.today():
             raise BadRequestException(
                 "La fecha de la consulta no puede ser anterior a la fecha actual."
             )
 
-        estudiante = self._obtener_estudiante()
+        estudiante = self._obtener_estudiante(usuario_actual)
         docente = self._obtener_docente(req.docenteId)
         modulo = self._obtener_modulo(req.moduloId)
 
@@ -58,24 +62,47 @@ class SolicitudConsultaService:
         )
         solicitud_guardada = guardar_con_numero_unico(self.repo, solicitud)
 
-        self.notificacion_service.notificar_nueva_solicitud(solicitud_guardada)
+        self.notificacion_service.notificar_nueva_solicitud(solicitud_guardada, estudiante)
         self.evento_service.nueva_solicitud(solicitud_guardada, estudiante)
 
         return solicitud_consulta_response(solicitud_guardada)
 
-    def obtener_por_id(self, id_solicitud: int):
-        return solicitud_consulta_response(self._obtener_solicitud(id_solicitud))
+    def obtener_por_id(self, id_solicitud: int, usuario_actual: Usuario):
+        solicitud = self._obtener_solicitud(id_solicitud)
+        if not self._es_participante(solicitud, usuario_actual) and not self._tiene_gestion(
+            usuario_actual
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permisos para consultar esta solicitud.",
+            )
+        return solicitud_consulta_response(solicitud)
 
-    def listar_todas(self):
-        return [solicitud_consulta_response(s) for s in self.repo.find_all()]
+    def listar_todas(self, usuario_actual: Usuario):
+        if usuario_actual.rol == Rol.ESTUDIANTE:
+            filas = self.repo.find_all_by_estudiante_id(usuario_actual.id)
+        elif usuario_actual.rol == Rol.DOCENTE:
+            filas = self.repo.find_all_by_docente_id(usuario_actual.id)
+        else:
+            if not self._tiene_gestion(usuario_actual):
+                raise HTTPException(
+                    status_code=403,
+                    detail="No tiene permisos para consultar todas las solicitudes.",
+                )
+            filas = self.repo.find_all()
+        return [solicitud_consulta_response(s) for s in filas]
 
-    def actualizar(self, id_solicitud: int, req: UpdateSolicitudConsultaRequest):
+    def actualizar(
+        self,
+        id_solicitud: int,
+        req: UpdateSolicitudConsultaRequest,
+        usuario_actual: Usuario,
+    ):
         if req.fechaConsulta < date.today():
             raise BadRequestException(
                 "La fecha de la consulta no puede ser anterior a la fecha actual."
             )
 
-        usuario_actual = obtener_usuario_auth(self.db)
         solicitud = self._obtener_solicitud(id_solicitud)
         modulo = self._obtener_modulo(req.moduloId)
         fecha_anterior = solicitud.fecha_consulta
@@ -102,32 +129,49 @@ class SolicitudConsultaService:
             or solicitud_guardada.hora_consulta != hora_anterior
         ):
             self.notificacion_service.notificar_cambio_agenda(
-                solicitud_guardada, destinatario, req.motivo or ""
+                solicitud_guardada, destinatario, req.motivo or "", usuario_actual
             )
             self.evento_service.cambio_agenda(solicitud_guardada, usuario_actual)
 
         return solicitud_consulta_response(solicitud_guardada)
 
-    def asignar_recurso_fisico(self, id_solicitud: int, req: AsignarRecursoFisicoRequest):
+    def asignar_recurso_fisico(
+        self,
+        id_solicitud: int,
+        req: AsignarRecursoFisicoRequest,
+        usuario_actual: Usuario,
+    ):
         solicitud = self._obtener_solicitud(id_solicitud)
-        usuario_actual = obtener_usuario_auth(self.db)
 
         if not self._validar_estado(solicitud):
             raise BadRequestException(
                 "No se puede asignar un recurso físico a esta consulta."
             )
 
+        if not self._tiene_gestion(usuario_actual) and usuario_actual.id != solicitud.docente_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo el docente asignado o un gestor pueden asignar recursos.",
+            )
+
         solicitud.recurso_fisico = self._obtener_recurso_fisico(req.recursoFisicoId)
         solicitud_guardada = self.repo.save(solicitud)
 
-        self.notificacion_service.notificar_asignacion_recurso(solicitud_guardada, solicitud_guardada.estudiante)
+        self.notificacion_service.notificar_asignacion_recurso(
+            solicitud_guardada, solicitud_guardada.estudiante, usuario_actual
+        )
         self.evento_service.asignacion_recurso(solicitud_guardada, usuario_actual)
 
         return solicitud_consulta_response(solicitud_guardada)
 
-    def cambiar_estado(self, id_solicitud: int, req: CambiarEstadoSolicitudRequest):
-        usuario_actual = obtener_usuario_auth(self.db)
+    def cambiar_estado(
+        self,
+        id_solicitud: int,
+        req: CambiarEstadoSolicitudRequest,
+        usuario_actual: Usuario,
+    ):
         solicitud = self._obtener_solicitud(id_solicitud)
+        self._validar_actor_cambio_estado(solicitud, usuario_actual, req.estado)
         self._validar_cambio_estado(solicitud.estado_consulta, req.estado)
         self._validar_motivo(req.estado, req.motivo)
 
@@ -136,15 +180,25 @@ class SolicitudConsultaService:
         destinatario = self._obtener_destinatario(solicitud_guardada, usuario_actual)
 
         self.notificacion_service.notificar_cambio_estado(
-            solicitud_guardada, destinatario, req.motivo
+            solicitud_guardada, destinatario, req.motivo, usuario_actual
         )
         self.evento_service.cambio_estado(solicitud_guardada, usuario_actual)
 
         return solicitud_consulta_response(solicitud_guardada)
 
-    def reasignar_docente(self, id_solicitud: int, req: ReasignarDocenteRequest):
+    def reasignar_docente(
+        self,
+        id_solicitud: int,
+        req: ReasignarDocenteRequest,
+        usuario_actual: Usuario,
+    ):
         solicitud = self._obtener_solicitud(id_solicitud)
-        usuario_actual = obtener_usuario_auth(self.db)
+
+        if not self._tiene_gestion(usuario_actual):
+            raise HTTPException(
+                status_code=403,
+                detail="Solo un gestor de solicitudes puede reasignar docentes.",
+            )
 
         if not self._validar_estado(solicitud):
             raise BadRequestException("No se puede reasignar esta consulta.")
@@ -152,16 +206,28 @@ class SolicitudConsultaService:
         solicitud.docente = self._obtener_docente(req.docenteId)
         solicitud_guardada = self.repo.save(solicitud)
 
-        self.notificacion_service.notificar_reasignacion(solicitud_guardada, solicitud_guardada.docente)
+        self.notificacion_service.notificar_reasignacion(
+            solicitud_guardada, solicitud_guardada.docente, usuario_actual
+        )
         self.evento_service.reasignacion(solicitud_guardada, usuario_actual)
 
         return solicitud_consulta_response(solicitud_guardada)
 
-    def _obtener_estudiante(self) -> Usuario:
-        usuario = obtener_usuario_auth(self.db)
-        if usuario.rol != Rol.ESTUDIANTE:
+    def eliminar(self, id_solicitud: int, usuario_actual: Usuario) -> None:
+        solicitud = self._obtener_solicitud(id_solicitud)
+
+        if not self._tiene_gestion(usuario_actual):
+            raise HTTPException(
+                status_code=403,
+                detail="Solo un gestor de solicitudes puede eliminar solicitudes.",
+            )
+
+        solicitud.estado = False
+
+    def _obtener_estudiante(self, usuario_actual: Usuario) -> Usuario:
+        if usuario_actual.rol != Rol.ESTUDIANTE:
             raise BadRequestException("El usuario indicado no tiene el rol ESTUDIANTE.")
-        return usuario
+        return usuario_actual
 
     def _obtener_docente(self, id_docente: int) -> Usuario:
         usuario = self.user_repo.find_by_id_and_estado_true(id_docente)
@@ -194,7 +260,40 @@ class SolicitudConsultaService:
             return solicitud.docente
         if usuario_actual.id == solicitud.docente_id:
             return solicitud.estudiante
-        raise BadRequestException("El usuario no pertenece a esta solicitud.")
+        return solicitud.docente
+
+    def _es_participante(self, solicitud: SolicitudConsulta, usuario_actual: Usuario) -> bool:
+        return (
+            usuario_actual.id == solicitud.estudiante_id
+            or usuario_actual.id == solicitud.docente_id
+        )
+
+    def _tiene_gestion(self, usuario_actual: Usuario) -> bool:
+        return self.mxl_repo.existe_permiso_activo(
+            usuario_actual.rol_id, NOMBRE_MODULO_GESTION
+        )
+
+    def _validar_actor_cambio_estado(
+        self,
+        solicitud: SolicitudConsulta,
+        usuario_actual: Usuario,
+        nuevo_estado: EstadoSolicitud,
+    ) -> None:
+        if self._tiene_gestion(usuario_actual):
+            return
+        if usuario_actual.id == solicitud.docente_id:
+            return
+        if usuario_actual.id == solicitud.estudiante_id:
+            if nuevo_estado == EstadoSolicitud.CANCELADA:
+                return
+            raise HTTPException(
+                status_code=403,
+                detail="El estudiante solo puede cancelar su propia solicitud.",
+            )
+        raise HTTPException(
+            status_code=403,
+            detail="No tiene permisos para cambiar el estado de esta solicitud.",
+        )
 
     def _validar_estado(self, solicitud: SolicitudConsulta) -> bool:
         return solicitud.estado_consulta in (EstadoSolicitud.EN_PROCESO, EstadoSolicitud.PENDIENTE)

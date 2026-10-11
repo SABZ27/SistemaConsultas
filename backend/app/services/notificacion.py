@@ -12,7 +12,6 @@ from app.repositories.solicitud_consulta import SolicitudConsultaRepository
 from app.repositories.usuario import UsuarioRepository
 from app.schemas.notificacion import RegistroNotificacionRequest
 from app.services.email import EmailService
-from app.utils.seguridad import obtener_usuario_auth
 
 
 class NotificacionService:
@@ -63,13 +62,13 @@ class NotificacionService:
 
     def _armar_notificacion(
         self,
+        remitente: Usuario,
         destinatario_id: int,
         tipo: TipoNotificacion,
         solicitud_id: int,
         titulo: str,
         mensaje: str,
     ):
-        remitente = obtener_usuario_auth(self.db)
         return self._registrar_notificacion(
             RegistroNotificacionRequest(
                 remitenteId=remitente.id,
@@ -81,8 +80,11 @@ class NotificacionService:
             )
         )
 
-    def notificar_nueva_solicitud(self, solicitud: SolicitudConsulta) -> None:
+    def notificar_nueva_solicitud(
+        self, solicitud: SolicitudConsulta, remitente: Usuario
+    ) -> None:
         self._armar_notificacion(
+            remitente,
             solicitud.docente_id,
             TipoNotificacion.NUEVA_SOLICITUD,
             solicitud.id,
@@ -95,9 +97,14 @@ class NotificacionService:
         )
 
     def notificar_cambio_agenda(
-        self, solicitud: SolicitudConsulta, destinatario: Usuario, motivo: str
+        self,
+        solicitud: SolicitudConsulta,
+        destinatario: Usuario,
+        motivo: str,
+        remitente: Usuario,
     ) -> None:
         self._armar_notificacion(
+            remitente,
             destinatario.id,
             TipoNotificacion.CAMBIO_AGENDAMIENTO,
             solicitud.id,
@@ -110,11 +117,16 @@ class NotificacionService:
         )
 
     def notificar_cambio_estado(
-        self, solicitud: SolicitudConsulta, destinatario: Usuario, motivo: str | None
+        self,
+        solicitud: SolicitudConsulta,
+        destinatario: Usuario,
+        motivo: str | None,
+        remitente: Usuario,
     ) -> None:
         titulo, mensaje = self._obtener_contenido_notificacion(solicitud, motivo)
         tipo_notificacion = self._obtener_tipo_notificacion(solicitud.estado_consulta)
         self._armar_notificacion(
+            remitente,
             destinatario.id,
             tipo_notificacion,
             solicitud.id,
@@ -123,9 +135,13 @@ class NotificacionService:
         )
 
     def notificar_asignacion_recurso(
-        self, solicitud: SolicitudConsulta, destinatario: Usuario
+        self,
+        solicitud: SolicitudConsulta,
+        destinatario: Usuario,
+        remitente: Usuario,
     ) -> None:
         self._armar_notificacion(
+            remitente,
             destinatario.id,
             TipoNotificacion.ASIGNACION_RECURSO,
             solicitud.id,
@@ -137,8 +153,14 @@ class NotificacionService:
             ),
         )
 
-    def notificar_reasignacion(self, solicitud: SolicitudConsulta, nuevo_docente: Usuario) -> None:
+    def notificar_reasignacion(
+        self,
+        solicitud: SolicitudConsulta,
+        nuevo_docente: Usuario,
+        remitente: Usuario,
+    ) -> None:
         self._armar_notificacion(
+            remitente,
             nuevo_docente.id,
             TipoNotificacion.REASIGNACION,
             solicitud.id,
@@ -150,8 +172,11 @@ class NotificacionService:
             ),
         )
 
-    def notificar_comentario(self, comentario: Comentario, destinatario: Usuario) -> None:
+    def notificar_comentario(
+        self, comentario: Comentario, destinatario: Usuario, remitente: Usuario
+    ) -> None:
         self._armar_notificacion(
+            remitente,
             destinatario.id,
             TipoNotificacion.COMENTARIO,
             comentario.solicitud_id,
@@ -162,32 +187,39 @@ class NotificacionService:
             ),
         )
 
-    def listar_notificaciones(self):
-        destinatario = obtener_usuario_auth(self.db)
+    def listar_notificaciones(self, usuario_actual: Usuario):
         return [
             notificacion_response(n)
             for n in self.repo.find_by_destinatario_and_tipo(
-                destinatario.id, TipoNotificacion.COMENTARIO
+                usuario_actual.id, TipoNotificacion.COMENTARIO
             )
         ]
 
-    def contar_notificaciones_no_leidas(self) -> int:
-        destinatario = obtener_usuario_auth(self.db)
+    def contar_notificaciones_no_leidas(self, usuario_actual: Usuario) -> int:
         return self.repo.count_by_destinatario_and_tipo_and_leida_false(
-            destinatario.id, TipoNotificacion.COMENTARIO
+            usuario_actual.id, TipoNotificacion.COMENTARIO
         )
 
-    def marcar_como_leida(self, id_notificacion: int):
-        destinatario = obtener_usuario_auth(self.db)
+    def marcar_como_leida(self, id_notificacion: int, usuario_actual: Usuario):
         notificacion = self.repo.find_by_id(id_notificacion)
         if notificacion is None:
             raise ResourceNotFoundException("Notificación no encontrada.")
 
-        if destinatario.id != notificacion.destinatario_id:
+        if usuario_actual.id != notificacion.destinatario_id:
             raise BadRequestException("Esta notificación no le pertenece.")
 
         notificacion.leida = True
         return notificacion_response(self.repo.save(notificacion))
+
+    def eliminar(self, id_notificacion: int, usuario_actual: Usuario) -> None:
+        notificacion = self.repo.find_by_id(id_notificacion)
+        if notificacion is None:
+            raise ResourceNotFoundException("Notificación no encontrada.")
+
+        if usuario_actual.id != notificacion.destinatario_id:
+            raise BadRequestException("Esta notificación no le pertenece.")
+
+        notificacion.estado = False
 
     def _obtener_tipo_notificacion(self, estado: EstadoSolicitud) -> TipoNotificacion:
         if estado == EstadoSolicitud.CANCELADA:

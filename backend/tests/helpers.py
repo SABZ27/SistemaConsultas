@@ -36,14 +36,7 @@ def login(client, correo, password="contrasenia123"):
 
 
 def crear_admin(client):
-    n = _next()
-    return _registrar_y_login(
-        client,
-        "ADMINISTRADOR",
-        f"admin{n}@test.com",
-        f"90000000{n:04d}",
-        n,
-    )
+    return login(client, "admin@test.com")
 
 
 def auth(token):

@@ -1,4 +1,4 @@
-from tests.helpers import crear_admin, crear_usuario, login
+from tests.helpers import auth, crear_admin, crear_usuario, login
 
 
 def test_registrar_estudiante(client):
@@ -61,7 +61,27 @@ def test_registro_identificacion_duplicada(client):
     assert resp.json()["message"] == "La identificación ya está registrada."
 
 
-def test_registro_rol_admin_permitido(client):
+def test_registro_rol_admin_rechazado(client):
+    resp = client.post(
+        "/auth/register",
+        json={
+            "identificacion": "3000000001",
+            "nombre": "Admin",
+            "apellido": "Intruso",
+            "correo": "admin-intruso@test.com",
+            "password": "contrasenia123",
+            "rol": "ADMINISTRADOR",
+        },
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "Forbidden"
+    assert (
+        resp.json()["message"]
+        == "El registro no permite crear usuarios con rol ADMINISTRADOR."
+    )
+
+
+def test_login_admin_sembrado(client):
     admin = crear_admin(client)
     assert admin["rol"] == "ADMINISTRADOR"
     assert admin["token"]
@@ -129,11 +149,19 @@ def test_forgot_password_usuario_inexistente(client):
     assert resp.json()["message"] == "No existe un usuario registrado con ese correo."
 
 
-def test_programas_publicos(client):
+def test_programas_requieren_autenticacion(client):
     resp = client.get("/programas")
+    assert resp.status_code == 401
+
+    estudiante = crear_usuario(client)
+    resp = client.get("/programas", headers=auth(estudiante["token"]))
     assert resp.status_code == 200
 
 
-def test_solicitudes_listar_publicos(client):
+def test_solicitudes_listar_requiere_autenticacion(client):
     resp = client.get("/solicitudes-consultas")
+    assert resp.status_code == 401
+
+    estudiante = crear_usuario(client)
+    resp = client.get("/solicitudes-consultas", headers=auth(estudiante["token"]))
     assert resp.status_code == 200

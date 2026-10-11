@@ -1,12 +1,12 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
 from app.models.usuario import Usuario
+from app.repositories.modulo_x_rol import ModuloXRolRepository
 from app.repositories.usuario import UsuarioRepository
-from app.utils.seguridad import establecer_usuario_actual
 
 seguridad_bearer = HTTPBearer(auto_error=False)
 
@@ -22,41 +22,48 @@ def _correo_desde_credenciales(
         return None
 
 
+def _correo_de_request(request: Request) -> str | None:
+    return getattr(request.state, "usuario_correo", None)
+
+
+def _buscar_usuario(request: Request, credenciales, db: Session) -> Usuario | None:
+    correo = _correo_de_request(request)
+    if not correo and credenciales is not None:
+        correo = _correo_desde_credenciales(credenciales)
+    if not correo:
+        return None
+    return UsuarioRepository(db).find_by_correo_and_estado_true(correo)
+
+
 def get_current_user(
+    request: Request,
     credenciales: HTTPAuthorizationCredentials | None = Depends(seguridad_bearer),
     db: Session = Depends(get_db),
 ) -> Usuario:
-    correo = _correo_desde_credenciales(credenciales)
-    usuario = None
-    if correo:
-        usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
+    usuario = _buscar_usuario(request, credenciales, db)
     if usuario is None:
         raise HTTPException(status_code=401, detail="No se encontró una sesión activa.")
-    establecer_usuario_actual(usuario.correo)
     return usuario
 
 
 def get_current_user_optional(
+    request: Request,
     credenciales: HTTPAuthorizationCredentials | None = Depends(seguridad_bearer),
     db: Session = Depends(get_db),
 ) -> Usuario | None:
-    correo = _correo_desde_credenciales(credenciales)
-    usuario = None
-    if correo:
-        usuario = UsuarioRepository(db).find_by_correo_and_estado_true(correo)
-    if usuario is not None:
-        establecer_usuario_actual(usuario.correo)
-    return usuario
+    return _buscar_usuario(request, credenciales, db)
 
 
-def admin_usuario(
-    _usuario: Usuario = Depends(get_current_user),
-) -> Usuario:
-    from app.models.enums import Rol
+def requiere_modulo(nombre_modulo: str):
+    def _dependencia(
+        usuario: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> Usuario:
+        if not ModuloXRolRepository(db).existe_permiso_activo(usuario.rol_id, nombre_modulo):
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permisos para realizar esta acción.",
+            )
+        return usuario
 
-    if _usuario.rol != Rol.ADMINISTRADOR:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo los administradores pueden realizar esta acción.",
-        )
-    return _usuario
+    return _dependencia

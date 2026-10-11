@@ -1,6 +1,9 @@
 import os
 
 os.environ["DB_URL"] = "sqlite+pysqlite:///./test_bd.sqlite3"
+os.environ["ADMIN_CORREO"] = "admin@test.com"
+os.environ["ADMIN_PASSWORD"] = "contrasenia123"
+os.environ["ADMIN_IDENTIFICACION"] = "9000000000"
 
 import pytest
 from fastapi.testclient import TestClient
