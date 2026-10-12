@@ -93,3 +93,26 @@ def eliminar_solicitud(
     usuario=Depends(get_current_user),
 ):
     SolicitudConsultaService(db).eliminar(id_solicitud, usuario)
+
+
+from app.schemas.calificacion import CalificacionRequest, CalificacionResponse
+from app.services.calificacion_consulta import CalificacionConsultaService
+
+
+@router.post("/{id_solicitud}/calificacion", response_model=CalificacionResponse, status_code=status.HTTP_201_CREATED)
+def calificar_solicitud(
+    id_solicitud: int,
+    req: CalificacionRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return CalificacionConsultaService(db).calificar(id_solicitud, req, usuario)
+
+
+@router.get("/{id_solicitud}/calificacion", response_model=CalificacionResponse)
+def obtener_calificacion(
+    id_solicitud: int,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+):
+    return CalificacionConsultaService(db).obtener_por_solicitud(id_solicitud, usuario)

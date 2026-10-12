@@ -6,16 +6,13 @@ from tests.helpers import (
     crear_modulo,
     crear_solicitud,
     crear_usuario,
+    escenario_completo,
     mañana,
 )
 
 
 def _escenario_base(client):
-    admin = crear_admin(client)
-    docente = crear_usuario(client, rol="DOCENTE")
-    estudiante = crear_usuario(client, rol="ESTUDIANTE")
-    modulo = crear_modulo(client, admin["token"])
-    return admin, docente, estudiante, modulo
+    return escenario_completo(client)
 
 
 def _poner_en_proceso(client, docente, sol_id):

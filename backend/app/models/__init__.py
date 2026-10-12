@@ -11,6 +11,11 @@ from app.models.comentario import Comentario
 from app.models.evento_solicitud import EventoSolicitud
 from app.models.notificacion import Notificacion
 from app.models.password_reset_token import PasswordResetToken
+from app.models.docente_modulo import DocenteModulo
+from app.models.tipo_documento import TipoDocumento
+from app.models.calificacion_consulta import CalificacionConsulta
+from app.models.periodo_academico import PeriodoAcademico
+from app.models.disponibilidad_docente import DisponibilidadDocente
 
 __all__ = [
     "Base",
@@ -25,4 +30,9 @@ __all__ = [
     "EventoSolicitud",
     "Notificacion",
     "PasswordResetToken",
+    "DocenteModulo",
+    "TipoDocumento",
+    "CalificacionConsulta",
+    "PeriodoAcademico",
+    "DisponibilidadDocente",
 ]

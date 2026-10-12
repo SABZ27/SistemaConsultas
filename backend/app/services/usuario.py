@@ -5,6 +5,7 @@ from app.mappers.usuario import usuario_response
 from app.models.usuario import Usuario
 from app.repositories.programa_academico import ProgramaAcademicoRepository
 from app.repositories.rol import RolRepository
+from app.repositories.tipo_documento import TipoDocumentoRepository
 from app.repositories.usuario import UsuarioRepository
 from app.schemas.usuario import (
     DocenteResumen,
@@ -20,6 +21,7 @@ class UsuarioService:
         self.user_repo = UsuarioRepository(db)
         self.prog_repo = ProgramaAcademicoRepository(db)
         self.rol_repo = RolRepository(db)
+        self.tipo_doc_repo = TipoDocumentoRepository(db)
 
     def listar_usuarios(self, incluir_inactivos: bool = False):
         filas = self.user_repo.find_all() if incluir_inactivos else self.user_repo.find_all_by_estado_true()
@@ -47,6 +49,8 @@ class UsuarioService:
             if programa is None:
                 raise ResourceNotFoundException("Programa académico no encontrado")
 
+        tipo_documento = self._resolver_tipo_documento(req.tipoDocumentoId)
+
         usuario = Usuario(
             identificacion=req.identificacion,
             nombre=req.nombre,
@@ -55,6 +59,7 @@ class UsuarioService:
             password=hash_password(req.password),
             rol_id=rol.id,
             programa=programa,
+            tipo_documento=tipo_documento,
         )
         self.user_repo.save(usuario)
         return usuario_response(usuario)
@@ -79,8 +84,17 @@ class UsuarioService:
         usuario.apellido = req.apellido
         usuario.correo = req.correo
         usuario.programa = programa
+        usuario.tipo_documento = self._resolver_tipo_documento(req.tipoDocumentoId)
 
         return usuario_response(usuario)
+
+    def _resolver_tipo_documento(self, tipo_documento_id: int | None):
+        if tipo_documento_id is None:
+            return None
+        tipo_documento = self.tipo_doc_repo.find_by_id_and_estado_true(tipo_documento_id)
+        if tipo_documento is None:
+            raise BadRequestException("El tipo de documento no es válido.")
+        return tipo_documento
 
     def eliminar_usuario(self, id_usuario: int) -> None:
         usuario = self.user_repo.find_by_id_and_estado_true(id_usuario)

@@ -16,6 +16,7 @@ class RegistroUsuarioRequest(BaseModel):
     password: str = Field(min_length=8, max_length=100)
     rol: Rol
     programaId: int | None = None
+    tipoDocumentoId: int | None = None
 
 
 class UpdateUsuarioRequest(BaseModel):
@@ -25,6 +26,7 @@ class UpdateUsuarioRequest(BaseModel):
     apellido: str = Field(min_length=1, max_length=100)
     correo: Correo = Field(min_length=1)
     programaId: int | None = None
+    tipoDocumentoId: int | None = None
 
 
 class UsuarioResponse(BaseModel):
@@ -36,6 +38,9 @@ class UsuarioResponse(BaseModel):
     rol: Rol
     programaId: int | None
     programaNombre: str | None
+    tipoDocumentoId: int | None
+    tipoDocumentoSigla: str | None
+    tipoDocumentoNombre: str | None
     estado: bool
     fechaCreacion: datetime
 

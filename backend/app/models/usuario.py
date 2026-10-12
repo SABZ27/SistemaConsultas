@@ -33,8 +33,12 @@ class Usuario(AuditoriaMixin, Base):
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     rol_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), nullable=False)
     programa_id: Mapped[int | None] = mapped_column(ForeignKey("programas_academicos.id"), nullable=True)
+    tipo_documento_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tipos_documento.id"), nullable=True
+    )
 
     programa: Mapped["ProgramaAcademico | None"] = relationship(back_populates="usuarios")
+    tipo_documento: Mapped["TipoDocumento | None"] = relationship(back_populates="usuarios")
     rol_rel: Mapped[RolEntidad] = relationship(back_populates="usuarios")
     comentarios: Mapped[list["Comentario"]] = relationship(back_populates="autor")
     eventos: Mapped[list["EventoSolicitud"]] = relationship(back_populates="usuario")

@@ -9,6 +9,7 @@ from tests.helpers import (
     crear_modulo,
     crear_solicitud,
     crear_usuario,
+    escenario_completo,
 )
 
 
@@ -36,10 +37,7 @@ def _limpiar_overrides():
 
 
 def _escenario(client):
-    admin = crear_admin(client)
-    docente = crear_usuario(client, rol="DOCENTE")
-    estudiante = crear_usuario(client, rol="ESTUDIANTE")
-    modulo = crear_modulo(client, admin["token"])
+    admin, docente, estudiante, modulo = escenario_completo(client)
     sol = crear_solicitud(
         client, estudiante["token"], docente["id_usuario"], modulo["id"]
     )

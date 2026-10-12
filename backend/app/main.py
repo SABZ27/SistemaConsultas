@@ -7,15 +7,20 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.routes import (
     auth,
+    calificaciones,
     comentarios,
-    modulos,
-    modulos_sistema,
-    notificaciones,
-    programas,
-    roles,
-    solicitudes_consultas,
-    usuarios,
-)
+    disponibilidad_docente,
+        docentes_modulos,
+        modulos,
+        modulos_sistema,
+        notificaciones,
+        periodos_academicos,
+        programas,
+        roles,
+        solicitudes_consultas,
+        tipos_documento,
+        usuarios,
+    )
 from app.core.security import decode_token
 from app.db.session import init_db
 from app.exceptions.errors import (
@@ -84,6 +89,11 @@ def crear_app() -> FastAPI:
     app.include_router(solicitudes_consultas.router)
     app.include_router(comentarios.router)
     app.include_router(notificaciones.router)
+    app.include_router(docentes_modulos.router)
+    app.include_router(tipos_documento.router)
+    app.include_router(periodos_academicos.router)
+    app.include_router(disponibilidad_docente.router)
+    app.include_router(calificaciones.router)
 
     return app
 

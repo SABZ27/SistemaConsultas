@@ -5,6 +5,7 @@ from tests.helpers import (
     crear_programa,
     crear_solicitud,
     crear_usuario,
+    escenario_completo,
     mañana,
 )
 

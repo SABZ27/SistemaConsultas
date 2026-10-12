@@ -13,6 +13,11 @@ from app.repositories.modulo_sistema import ModuloSistemaRepository
 from app.repositories.modulo_x_rol import ModuloXRolRepository
 from app.repositories.rol import RolRepository
 from app.repositories.usuario import UsuarioRepository
+from app.repositories.tipo_documento import TipoDocumentoRepository
+from app.models.tipo_documento import TipoDocumento
+from app.repositories.periodo_academico import PeriodoAcademicoRepository
+from app.models.periodo_academico import PeriodoAcademico
+from datetime import date
 
 logger = logging.getLogger("sistema_consultas.db")
 
@@ -53,6 +58,31 @@ MATRIZ_MODULOS_X_ROL = {
     "DISPONIBILIDAD_DOCENTE": {Rol.ADMINISTRADOR, Rol.DOCENTE},
     "CALIFICACIONES": {Rol.ADMINISTRADOR, Rol.DOCENTE, Rol.ESTUDIANTE},
 }
+
+
+def _sembrar_tipos_documento(db: Session) -> None:
+    repo = TipoDocumentoRepository(db)
+    datos = [
+        ("Cédula de Ciudadanía", "CC"),
+        ("Tarjeta de Identidad", "TI"),
+        ("Cédula de Extranjería", "CE"),
+        ("Pasaporte", "PAS"),
+    ]
+    for nombre, sigla in datos:
+        if repo.find_by_nombre_and_estado_true(nombre) is None and repo.find_by_sigla_and_estado_true(sigla) is None:
+            repo.save(TipoDocumento(nombre=nombre, sigla=sigla))
+
+
+def _sembrar_periodo_vigente(db: Session) -> None:
+    repo = PeriodoAcademicoRepository(db)
+    year = date.today().year
+    nombre = f"{year}-1"
+    inicio = date(year, 1, 1)
+    fin = date(year, 12, 31)
+    if repo.find_by_nombre_and_estado_true(nombre) is None:
+        if repo.existe_solape(inicio, fin):
+            return
+        repo.save(PeriodoAcademico(nombre=nombre, fecha_inicio=inicio, fecha_fin=fin))
 
 
 def _sembrar_roles(db: Session) -> None:
@@ -120,3 +150,5 @@ def ejecutar_seeds(db: Session) -> None:
     _sembrar_modulos_sistema(db)
     _sembrar_modulos_x_rol(db)
     _sembrar_admin(db)
+    _sembrar_tipos_documento(db)
+    _sembrar_periodo_vigente(db)

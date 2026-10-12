@@ -8,8 +8,11 @@ from app.mappers.solicitud_consulta import solicitud_consulta_response
 from app.models.enums import EstadoSolicitud, Rol
 from app.models.solicitud_consulta import SolicitudConsulta
 from app.models.usuario import Usuario
+from app.repositories.disponibilidad_docente import DisponibilidadDocenteRepository
+from app.repositories.docente_modulo import DocenteModuloRepository
 from app.repositories.modulo import ModuloRepository
 from app.repositories.modulo_x_rol import ModuloXRolRepository
+from app.repositories.periodo_academico import PeriodoAcademicoRepository
 from app.repositories.solicitud_consulta import SolicitudConsultaRepository
 from app.repositories.usuario import UsuarioRepository
 from app.schemas.solicitud import (
@@ -35,16 +38,23 @@ class SolicitudConsultaService:
         self.notificacion_service = NotificacionService(db)
         self.evento_service = EventoSolicitudService(db)
         self.mxl_repo = ModuloXRolRepository(db)
+        self.docente_modulo_repo = DocenteModuloRepository(db)
+        self.periodo_repo = PeriodoAcademicoRepository(db)
+        self.disponibilidad_repo = DisponibilidadDocenteRepository(db)
 
     def registrar(self, req: RegistroSolicitudConsultaRequest, usuario_actual: Usuario):
+        estudiante = self._obtener_estudiante(usuario_actual)
+        docente = self._obtener_docente(req.docenteId)
+        modulo = self._obtener_modulo(req.moduloId)
+
+        self._validar_periodo_vigente(req.fechaConsulta)
+        self._validar_docente_asignado(docente.id, modulo.id)
+        self._validar_disponibilidad(docente.id, req.fechaConsulta, req.horaConsulta)
+
         if req.fechaConsulta < date.today():
             raise BadRequestException(
                 "La fecha de la consulta no puede ser anterior a la fecha actual."
             )
-
-        estudiante = self._obtener_estudiante(usuario_actual)
-        docente = self._obtener_docente(req.docenteId)
-        modulo = self._obtener_modulo(req.moduloId)
 
         solicitud = SolicitudConsulta(
             estado_consulta=EstadoSolicitud.PENDIENTE,
@@ -248,6 +258,26 @@ class SolicitudConsultaService:
         if modulo is None:
             raise ResourceNotFoundException("Módulo no encontrado.")
         return modulo
+
+    def _validar_periodo_vigente(self, fecha: date) -> None:
+        if self.periodo_repo.find_vigente(fecha) is None:
+            raise BadRequestException(
+                "La fecha de la consulta no corresponde a un periodo académico vigente."
+            )
+
+    def _validar_docente_asignado(self, id_docente: int, id_modulo: int) -> None:
+        if not self.docente_modulo_repo.existe_asignacion(id_docente, id_modulo):
+            raise BadRequestException(
+                "El docente no está asignado al módulo indicado."
+            )
+
+    def _validar_disponibilidad(self, id_docente: int, fecha: date, hora) -> None:
+        if not self.disponibilidad_repo.tiene_disponibilidad(
+            id_docente, fecha.isoweekday(), hora
+        ):
+            raise BadRequestException(
+                "El docente no tiene disponibilidad en el horario seleccionado."
+            )
 
     def _obtener_solicitud(self, id_solicitud: int) -> SolicitudConsulta:
         solicitud = self.repo.find_by_id(id_solicitud)

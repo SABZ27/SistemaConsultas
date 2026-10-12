@@ -54,3 +54,16 @@ def eliminar_modulo(
     _usuario=Depends(requiere_modulo(NOMBRE_MODULO)),
 ):
     ModuloService(db).eliminar_modulo(id_modulo)
+
+
+from app.services.docente_modulo import DocenteModuloService
+from app.schemas.docente_modulo import DocenteResumenModulo
+
+
+@router.get("/{id_modulo}/docentes", response_model=list[DocenteResumenModulo])
+def listar_docentes_por_modulo(
+    id_modulo: int,
+    db: Session = Depends(get_db),
+    _usuario=Depends(get_current_user),
+):
+    return DocenteModuloService(db).listar_docentes_por_modulo(id_modulo)
