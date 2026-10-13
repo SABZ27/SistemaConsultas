@@ -8,15 +8,17 @@ def _next():
     return _contador["n"]
 
 
-def _registrar_y_login(client, rol, correo, identificacion, n):
+def _registrar_y_login(client, rol, correo, identificacion, n, programa_id=None, nombre=None):
     payload = {
         "identificacion": identificacion,
-        "nombre": f"Nombre{n}",
+        "nombre": nombre or f"Nombre{n}",
         "apellido": "Apellido",
         "correo": correo,
         "password": "contrasenia123",
         "rol": rol,
     }
+    if programa_id is not None:
+        payload["programaId"] = programa_id
     resp = client.post("/auth/register", json=payload)
     assert resp.status_code == 201, resp.text
     return login(client, correo)
@@ -97,6 +99,45 @@ def crear_recurso(client, token, bloque_id):
     return resp.json()
 
 
+def _asegurar_prerequisitos(docente_id, modulo_id, fecha, hora):
+    from datetime import datetime, time as _time
+
+    from app.db.session import SessionLocal
+    from app.models.disponibilidad_docente import DisponibilidadDocente
+    from app.models.docente_modulo import DocenteModulo
+    from app.repositories.disponibilidad_docente import (
+        DisponibilidadDocenteRepository,
+    )
+    from app.repositories.docente_modulo import DocenteModuloRepository
+
+    if isinstance(hora, str):
+        hora = datetime.strptime(hora, "%H:%M").time()
+
+    db = SessionLocal()
+    try:
+        dm_repo = DocenteModuloRepository(db)
+        if dm_repo.find_by_docente_and_modulo(docente_id, modulo_id) is None:
+            dm_repo.save(DocenteModulo(docente_id=docente_id, modulo_id=modulo_id))
+
+        disp_repo = DisponibilidadDocenteRepository(db)
+        dia = fecha.isoweekday()
+        if not disp_repo.tiene_disponibilidad(docente_id, dia, hora):
+            inicio = _time(0, 0)
+            fin = _time(23, 59)
+            if not disp_repo.existe_solape(docente_id, dia, inicio, fin):
+                disp_repo.save(
+                    DisponibilidadDocente(
+                        docente_id=docente_id,
+                        dia_semana=dia,
+                        hora_inicio=inicio,
+                        hora_fin=fin,
+                    )
+                )
+        db.commit()
+    finally:
+        db.close()
+
+
 def crear_solicitud(
     client,
     token,
@@ -108,13 +149,17 @@ def crear_solicitud(
     asunto="Consulta de prueba",
     descripcion="Necesito asesor??a en el tema.",
 ):
+    fecha_dt = fecha or (date.today() + timedelta(days=1))
+    if isinstance(fecha_dt, str):
+        fecha_dt = date.fromisoformat(fecha_dt)
+    _asegurar_prerequisitos(docente_id, modulo_id, fecha_dt, hora)
     resp = client.post(
         "/solicitudes-consultas",
         json={
             "prioridad": prioridad,
             "asunto": asunto,
             "descripcion": descripcion,
-            "fechaConsulta": fecha or (date.today() + timedelta(days=1)).isoformat(),
+            "fechaConsulta": fecha_dt.isoformat(),
             "horaConsulta": hora,
             "docenteId": docente_id,
             "moduloId": modulo_id,
@@ -127,29 +172,13 @@ def crear_solicitud(
 
 def mañana():
     return (date.today() + timedelta(days=1)).isoformat()
-def crear_docente(client, token, nombre='Docente', apellido='Prueba', correo=None, identificacion=None):
+def crear_docente(client, token=None, nombre='Docente', apellido='Prueba', correo=None, identificacion=None):
     n = _next()
     if correo is None:
         correo = f'docente{n}@test.com'
     if identificacion is None:
         identificacion = f'20000000{n:04d}'
-    resp = client.post(
-        '/auth/register',
-        json={
-            'identificacion': identificacion,
-            'nombre': nombre,
-            'apellido': apellido,
-            'correo': correo,
-            'password': 'contrasenia123',
-            'rol': 'DOCENTE',
-        },
-        headers=auth(token),
-    )
-    if resp.status_code == 201:
-        # get user id by listing or just return structure; easier to create via direct repo not exposed, but tests use our helpers pattern
-        pass
-    # fallback: create via admin endpoint if available? not specified; use _registrar_y_login style adjusted
-    return _registrar_y_login(client, 'DOCENTE', correo, identificacion, n)
+    return _registrar_y_login(client, 'DOCENTE', correo, identificacion, n, nombre=nombre)
 
 
 def crear_estudiante(client, token=None, nombre='Estudiante', apellido='Prueba', correo=None, identificacion=None, programa_id=None):
@@ -158,24 +187,7 @@ def crear_estudiante(client, token=None, nombre='Estudiante', apellido='Prueba',
         correo = f'estudiante{n}@test.com'
     if identificacion is None:
         identificacion = f'10000000{n:04d}'
-    payload = {
-        'identificacion': identificacion,
-        'nombre': nombre,
-        'apellido': apellido,
-        'correo': correo,
-        'password': 'contrasenia123',
-        'rol': 'ESTUDIANTE',
-    }
-    if programa_id is not None:
-        payload['programaId'] = programa_id
-    resp = client.post('/auth/register', json=payload, headers=auth(token))
-    # try to get created user; but easier to return what tests expect - often just id via listing? tests may not need full user
-    # but crear_usuario in old helpers registered as admin context; register allows creating estudiante via endpoint? no - register is open; but in tests they might expect using admin token? no wait - looking at test patterns
-    # old tests: crear_estudiante uses admin token sometimes? let us check - in our escenario_completo we pass admin token to crear_docente/crear_estudiante? in our new code we call crear_docente(client, admin['token'])
-    # but register endpoint doesn't require admin token; it just creates non-admin users
-    # so better to call register without admin token? or keep compatible
-    # but the helper as written takes token - maybe ignore it and just register
-    return _registrar_y_login(client, 'ESTUDIANTE', correo, identificacion, n)
+    return _registrar_y_login(client, 'ESTUDIANTE', correo, identificacion, n, programa_id=programa_id, nombre=nombre)
 
 
 def crear_periodo(client, token, nombre=None, fecha_inicio=None, fecha_fin=None):
@@ -210,8 +222,20 @@ def crear_disponibilidad(client, token, docente_id, dia_semana=1, hora_inicio='0
     return resp.json()
 
 
-def disponibilidad_completa(client, token, docente_id, modulo_id=None, dia_semana=1):
-    return crear_disponibilidad(client, token, docente_id, dia_semana=dia_semana, hora_inicio='08:00', hora_fin='18:00', modulo_id=modulo_id)
+def disponibilidad_completa(client, token, docente_id, modulo_id=None, fecha=None):
+    for dia in range(1, 8):
+        try:
+            crear_disponibilidad(
+                client,
+                token,
+                docente_id,
+                dia_semana=dia,
+                hora_inicio='00:00',
+                hora_fin='23:59',
+                modulo_id=modulo_id,
+            )
+        except AssertionError:
+            pass
 
 
 def asegurar_periodo_cubre(client, token, fecha_consulta):
@@ -231,7 +255,6 @@ def escenario_completo(client):
     docente = crear_docente(client, admin['token'])
     estudiante = crear_estudiante(client, admin['token'])
     modulo = crear_modulo(client, admin['token'])
-    crear_periodo(client, admin['token'])
-    asignar_docente_modulo(client, admin['token'], docente['id'], modulo['id'])
-    disponibilidad_completa(client, admin['token'], docente['id'], modulo_id=modulo['id'])
+    asignar_docente_modulo(client, admin['token'], docente['id_usuario'], modulo['id'])
+    disponibilidad_completa(client, admin['token'], docente['id_usuario'], modulo_id=modulo['id'])
     return admin, docente, estudiante, modulo
