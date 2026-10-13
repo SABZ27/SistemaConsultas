@@ -61,8 +61,8 @@ def crear_modulo(client, token, nombre=None):
     resp = client.post(
         "/modulos",
         json={
-            "nombre": nombre or f"M??dulo {n}",
-            "descripcion": f"Descripci??n del m??dulo {n}",
+            "nombre": nombre or f"Módulo {n}",
+            "descripcion": f"Descripción del módulo {n}",
         },
         headers=auth(token),
     )
@@ -147,7 +147,7 @@ def crear_solicitud(
     hora="06:30",
     prioridad="MEDIA",
     asunto="Consulta de prueba",
-    descripcion="Necesito asesor??a en el tema.",
+    descripcion="Necesito asesoría en el tema.",
 ):
     fecha_dt = fecha or (date.today() + timedelta(days=1))
     if isinstance(fecha_dt, str):
