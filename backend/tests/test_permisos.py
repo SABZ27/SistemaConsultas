@@ -297,6 +297,26 @@ def test_eliminar_notificacion_destinatario(client):
     assert resp.status_code == 204
 
 
+def test_periodo_sembrado_cubre_hoy_y_fin_de_anio():
+    from datetime import date
+
+    from app.db.seeds import ejecutar_seeds
+    from app.db.session import SessionLocal
+    from app.repositories.periodo_academico import PeriodoAcademicoRepository
+
+    with SessionLocal() as db:
+        ejecutar_seeds(db)
+        db.commit()
+
+        repo = PeriodoAcademicoRepository(db)
+        hoy = date.today()
+        periodo = repo.find_vigente(hoy)
+
+        assert periodo is not None
+        assert periodo.fecha_inicio <= hoy <= periodo.fecha_fin
+        assert periodo.fecha_fin >= date(hoy.year, 12, 31)
+
+
 def test_seeds_idempotentes(client):
     from app.db.seeds import ejecutar_seeds
     from app.db.session import SessionLocal
