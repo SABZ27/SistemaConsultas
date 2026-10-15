@@ -15,6 +15,9 @@ const env = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'sistema_consultas_infra',
     connectionLimit: numero(process.env.DB_CONNECTION_LIMIT, 10),
+    // DB_SSL=true activa SSL en la conexion MySQL (exigido por algunos
+    // proveedores gestionados). Por defecto false (MySQL local sin TLS).
+    ssl: String(process.env.DB_SSL || '').trim().toLowerCase() === 'true',
   },
   jwtSecret: process.env.JWT_SECRET || '',
   corsOrigins: (process.env.CORS_ORIGINS || '*')

@@ -11,8 +11,12 @@ async function main() {
   const user = process.env.DB_USER || 'root';
   const password = process.env.DB_PASSWORD || '';
   const database = process.env.DB_NAME || 'sistema_consultas_infra';
+  const ssl =
+    String(process.env.DB_SSL || '').trim().toLowerCase() === 'true'
+      ? { ssl: { rejectUnauthorized: false } }
+      : {};
 
-  const admin = await mysql.createConnection({ host, port, user, password, multipleStatements: true });
+  const admin = await mysql.createConnection({ host, port, user, password, multipleStatements: true, ...ssl });
   await admin.query(
     `CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
   );
@@ -25,6 +29,7 @@ async function main() {
     password,
     database,
     multipleStatements: true,
+    ...ssl,
   });
   const sql = fs.readFileSync(path.join(__dirname, '..', 'sql', 'schema.sql'), 'utf8');
   await conexion.query(sql);
