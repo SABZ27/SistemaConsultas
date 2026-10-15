@@ -7,8 +7,8 @@ from app.exceptions.errors import ServiceUnavailableException
 
 logger = logging.getLogger("sistema_consultas")
 
-TIEMPO_ESPERA_SEGUNDOS = 10.0
-INTENTOS = 2  # 1 intento + 1 reintento (el servicio puede estar dormido)
+# 1 intento + 1 reintento (el servicio puede estar dormido / arranque en frío).
+INTENTOS = 2
 
 
 class InfraestructuraClient:
@@ -17,16 +17,19 @@ class InfraestructuraClient:
     Reenvía el Bearer del usuario. Un recurso inexistente (404) se representa
     como ``None``; los errores de red o las respuestas 5xx se traducen a un
     :class:`ServiceUnavailableException` (HTTP 503).
+
+    El timeout se toma de ``INFRA_TIMEOUT`` (por defecto 60 s) para tolerar los
+    arranques en frío del servicio en la nube.
     """
 
     def __init__(
         self,
         base_url: str | None = None,
-        timeout: float = TIEMPO_ESPERA_SEGUNDOS,
+        timeout: float | None = None,
         intentos: int = INTENTOS,
     ):
         self.base_url = (base_url or settings.infra_service_url).rstrip("/")
-        self.timeout = timeout
+        self.timeout = settings.infra_timeout if timeout is None else timeout
         self.intentos = max(1, intentos)
 
     def obtener_recurso_fisico(self, id_recurso: int, token: str) -> dict | None:

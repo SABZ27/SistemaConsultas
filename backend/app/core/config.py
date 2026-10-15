@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     # Servicio de infraestructura (Express + MySQL)
     infra_service_url: str = "http://localhost:3001"
+    # Tiempo de espera (segundos) de las llamadas HTTP a infraestructura.
+    # 60 s por defecto para tolerar arranques en frío (p. ej. Render).
+    infra_timeout: float = 60.0
 
     @property
     def database_url(self) -> str:
