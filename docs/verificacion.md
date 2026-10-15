@@ -38,7 +38,7 @@ Bases usadas (por paso):
 | Jest | Express | MySQL local | `sistema_consultas_infra_test` y `sistema_consultas_infra_w1..w8_test` (terminan en `_test`) |
 
 Notas de seguridad de la verificación:
-- Antes de cualquier DDL se comprobó que el host de `DB_URL_VERIF` contiene `<HOST_NEON_VERIFICACION>`; se abortaría si no.
+- Antes de cualquier DDL se comprobó que el host de `DB_URL_VERIF` corresponde a `<HOST_NEON_VERIFICACION>`; se abortaría si no.
 - No se usó `backend/.env`. El `JWT_SECRET` de FastAPI se tomó de `infraestructura-service/.env` y se pasó por variable de entorno sin imprimirlo.
 - No hubo error de `channel_binding`; la conexión a Neon funcionó sin ajustes.
 - No se hizo push ni despliegue.
@@ -158,7 +158,7 @@ Bases creadas: `sistema_consultas_infra_test` y `sistema_consultas_infra_w1..w8_
 & npm.cmd run start            # puerto 3001
 
 # FastAPI (backend) contra PostgreSQL de verificación
-$env:DB_URL=$env:DB_URL_VERIF                                   # host con <HOST_NEON_VERIFICACION>*
+$env:DB_URL=$env:DB_URL_VERIF                                   # host con <HOST_NEON_VERIFICACION>
 $env:JWT_SECRET=(<JWT_SECRET de infraestructura-service/.env>)  # mismo valor que Express; no imprimir
 $env:ADMIN_CORREO='admin@test.com'; $env:ADMIN_PASSWORD='<clave>'; $env:ADMIN_IDENTIFICACION='9000000000'
 $env:INFRA_SERVICE_URL='http://127.0.0.1:3001'
