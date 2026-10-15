@@ -1,7 +1,7 @@
 # infraestructura-service
 
 Microservicio de **infraestructura física** (sedes, zonas y recursos físicos) para el
-Sistema de Consultas. Implementado con **Node 20 + Express** sobre **MySQL 8 (InnoDB, utf8mb4)**.
+Sistema de Consultas. Implementado con **Node 24 + Express** sobre **MySQL 8 (InnoDB, utf8mb4)**.
 
 Forma parte del monorepo junto al backend FastAPI (`backend/`) y comparte el mismo
 `JWT_SECRET`. El backend FastAPI lo consume en la Fase 4 para validar y resolver recursos.
@@ -32,7 +32,7 @@ Piso 1 a Piso 5 con Salón 1 a Salón 6 en cada piso.
 
 ## Instalación
 
-Requiere Node 20+ y MySQL 8.
+Requiere Node 24+ y MySQL 8.
 
 ```bash
 cd infraestructura-service
