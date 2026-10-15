@@ -36,6 +36,13 @@ class NotificacionRepository(RepoBase):
             Notificacion.leida.is_(False),
         ).count()
 
+    def count_by_destinatario_and_leida_false(self, destinatario_id: int) -> int:
+        return self.db.query(Notificacion.id).filter(
+            Notificacion.destinatario_id == destinatario_id,
+            Notificacion.estado.is_(True),
+            Notificacion.leida.is_(False),
+        ).count()
+
     def marcar_comentarios_leidos(self, destinatario_id: int, solicitud_consulta_id: int) -> None:
         self.db.query(Notificacion).filter(
             Notificacion.destinatario_id == destinatario_id,

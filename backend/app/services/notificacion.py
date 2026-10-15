@@ -190,15 +190,11 @@ class NotificacionService:
     def listar_notificaciones(self, usuario_actual: Usuario):
         return [
             notificacion_response(n)
-            for n in self.repo.find_by_destinatario_and_tipo(
-                usuario_actual.id, TipoNotificacion.COMENTARIO
-            )
+            for n in self.repo.find_all_by_destinatario_id(usuario_actual.id)
         ]
 
     def contar_notificaciones_no_leidas(self, usuario_actual: Usuario) -> int:
-        return self.repo.count_by_destinatario_and_tipo_and_leida_false(
-            usuario_actual.id, TipoNotificacion.COMENTARIO
-        )
+        return self.repo.count_by_destinatario_and_leida_false(usuario_actual.id)
 
     def marcar_como_leida(self, id_notificacion: int, usuario_actual: Usuario):
         notificacion = self.repo.find_by_id(id_notificacion)

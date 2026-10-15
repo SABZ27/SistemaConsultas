@@ -417,14 +417,15 @@ def test_notificaciones_flujo(client):
     resp = client.get("/notificaciones", headers=auth(docente["token"]))
     assert resp.status_code == 200
     notificaciones = resp.json()
-    assert len(notificaciones) == 1
-    notif = notificaciones[0]
+    assert len(notificaciones) == 2
+    assert {n["tipo"] for n in notificaciones} == {"NUEVA_SOLICITUD", "COMENTARIO"}
+    notif = next(n for n in notificaciones if n["tipo"] == "COMENTARIO")
     assert notif["numeroConsulta"] == sol["numeroConsulta"]
     assert notif["leida"] is False
 
     resp = client.get("/notificaciones/no-leidas/count", headers=auth(docente["token"]))
     assert resp.status_code == 200
-    assert resp.json() == 1
+    assert resp.json() == 2
 
     resp = client.patch(
         f"/notificaciones/{notif['id']}/leer", headers=auth(docente["token"])
@@ -433,7 +434,7 @@ def test_notificaciones_flujo(client):
     assert resp.json()["leida"] is True
 
     resp = client.get("/notificaciones/no-leidas/count", headers=auth(docente["token"]))
-    assert resp.json() == 0
+    assert resp.json() == 1
 
 
 def test_marcar_notificacion_ajena(client):
