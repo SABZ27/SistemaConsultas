@@ -17,6 +17,10 @@ Configuración por variables de entorno (nunca se imprimen secretos):
 
 Uso:
   python scripts/e2e.py [full|caido]
+
+No se ejecuta automáticamente. Si crea datos, pide confirmación explícita por
+consola. Las contraseñas se leen por variable de entorno o por entrada oculta,
+nunca por argumento ni guardadas en archivos.
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ INFRA_URL = os.environ.get("INFRA_URL", "http://127.0.0.1:3001").rstrip("/")
 ADMIN_CORREO = os.environ.get("ADMIN_CORREO", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
-PASSWORD = "contrasenia123"
+PASSWORD = os.environ.get("TEST_PASSWORD", "contrasenia123")
 TIMEOUT = 20.0
 
 _resultados: list[tuple[str, bool, str]] = []
@@ -57,6 +61,25 @@ def _patch(client, url, json, token=None):
 def _get(client, url, token=None):
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     return client.get(url, headers=headers)
+
+
+def _pedir_confirmacion() -> bool:
+    try:
+        resp = input("Este script puede crear datos de prueba. ¿Deseas continuar? (escribe SI para confirmar): ")
+    except Exception:
+        return False
+    return resp.strip().upper() == "SI"
+
+
+def _obtener_password() -> str:
+    if ADMIN_PASSWORD:
+        return ADMIN_PASSWORD
+    try:
+        import getpass
+
+        return getpass.getpass("Contraseña de administrador (entrada oculta): ")
+    except Exception:
+        return ""
 
 
 def login(client, correo, password):
@@ -85,13 +108,23 @@ def _nar(n: int) -> str:
 
 
 def modo_full() -> int:
+    if not ADMIN_CORREO:
+        print("Falta ADMIN_CORREO en el entorno.")
+        return 2
+    if not _pedir_confirmacion():
+        print("Cancelado por el usuario.")
+        return 2
+    admin_password = _obtener_password()
+    if not admin_password:
+        print("Falta contraseña (ADMIN_PASSWORD o entrada oculta).")
+        return 2
     fecha = date.today() + timedelta(days=1)
     marca = fecha.strftime("%H%M%S") + str(random.randint(100, 999))
     anio = date.today().year
     anio_sig = anio + 1
 
     with httpx.Client(timeout=TIMEOUT) as client:
-        admin = login(client, ADMIN_CORREO, ADMIN_PASSWORD)
+        admin = login(client, ADMIN_CORREO, admin_password)
         registrar("login admin", True, admin.get("rol", ""))
 
         modulos_admin = {m["nombre"] for m in (admin.get("modulos") or [])}
@@ -288,10 +321,20 @@ def modo_full() -> int:
 
 
 def modo_caido() -> int:
+    if not ADMIN_CORREO:
+        print("Falta ADMIN_CORREO en el entorno.")
+        return 2
+    if not _pedir_confirmacion():
+        print("Cancelado por el usuario.")
+        return 2
+    admin_password = _obtener_password()
+    if not admin_password:
+        print("Falta contraseña (ADMIN_PASSWORD o entrada oculta).")
+        return 2
     fecha = date.today() + timedelta(days=1)
     marca = fecha.strftime("%H%M%S") + str(random.randint(100, 999))
     with httpx.Client(timeout=TIMEOUT) as client:
-        admin = login(client, ADMIN_CORREO, ADMIN_PASSWORD)
+        admin = login(client, ADMIN_CORREO, admin_password)
         docente = registro(client, f"docente.caido.{marca}@test.com", _nar(31), "DOCENTE")
         estudiante = registro(client, f"estudiante.caido.{marca}@test.com", _nar(11), "ESTUDIANTE")
         r = _post(
@@ -377,8 +420,8 @@ def _resumen() -> int:
 
 def main() -> int:
     modo = sys.argv[1] if len(sys.argv) > 1 else "full"
-    if not ADMIN_CORREO or not ADMIN_PASSWORD:
-        print("Faltan ADMIN_CORREO/ADMIN_PASSWORD en el entorno.")
+    if not ADMIN_CORREO:
+        print("Falta ADMIN_CORREO en el entorno.")
         return 2
     return modo_caido() if modo == "caido" else modo_full()
 

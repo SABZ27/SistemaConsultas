@@ -120,20 +120,29 @@ Actualmente la API se encuentra organizada en los siguientes módulos (rama `dev
 
 /modulos
 
-/sedes
+/sedes                   # infraestructura física (PostgreSQL)
 
-/bloques
+/zonas                   # infraestructura física (PostgreSQL)
 
-/recursos-fisicos
+/recursos-fisicos        # infraestructura física (PostgreSQL)
 
 /solicitudes-consultas   # incluye mis-solicitudes, cambio de estado,
-                         # asignación de recurso y reasignación de docente
+                         # asignación de recurso, reasignación de docente y
+                         # validación de festivo (al crear/reprogramar)
 
 /comentarios
 
 /notificaciones
 
 /reportes                # pendiente de integración desde feat/reportes
+```
+
+**Microservicio de servicios externos (Express):**
+
+```text
+/festivos                # GET /festivos/validar?fecha=YYYY-MM-DD&pais=CO
+/correos                 # POST /correos (solo rol SERVICIO)
+/servicios-externos     # bitácora de llamadas y servicios registrados
 ```
 
 Cada módulo agrupa los endpoints relacionados con un único recurso del sistema.

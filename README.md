@@ -10,6 +10,13 @@ El monorepo tiene dos servicios que se despliegan por separado en **Render**:
 | `backend/` | FastAPI + SQLAlchemy + Uvicorn (Python 3.13) | PostgreSQL (Neon) |
 | `infraestructura-service/` | Express + Node 24 | MySQL (Aiven) |
 
+## Arquitectura final
+
+- **PostgreSQL (Neon)**: contiene **19 tablas** del dominio de negocio, incluyendo `sedes`, `zonas` y `recursos_fisicos` con claves foráneas hacia `solicitudes_consultas` (`recurso_fisico_id`).
+- **MySQL (Aiven)**: contiene las **4 tablas** de servicios externos (`servicios_externos`, `consultas_servicio_externo`, `festivos`, `correos_enviados`) con las relaciones definidas entre ellas.
+- **FastAPI (backend)**: expone endpoints del dominio, incluyendo `/sedes`, `/zonas`, `/recursos-fisicos`. Valida fechas festivas al crear y reprogramar solicitudes, llamando al microservicio de servicios externos.
+- **Express (infraestructura-service)**: expone servicios externos en `/festivos`, `/correos`, `/servicios-externos`. `POST /correos` solo acepta tokens con rol `SERVICIO`. Usa **Nager.Date** para festivos y **Brevo** para envío de correos transaccionales.
+
 ## Roles
 
 - **ESTUDIANTE**: crea y da seguimiento a sus consultas, comenta y califica.
@@ -48,7 +55,8 @@ variables y valores de ejemplo (nunca reales):
   `INFRA_SERVICE_URL`, `INFRA_TIMEOUT`.
 - `infraestructura-service/.env.example`: `PORT`, `DB_HOST`, `DB_PORT`,
   `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL`, `DB_CONNECTION_LIMIT`,
-  `JWT_SECRET`, `CORS_ORIGINS`, `TEST_DB_NAME`.
+  `JWT_SECRET`, `CORS_ORIGINS`, `TEST_DB_NAME`, `EMAIL_PROVIDER_API_KEY`,
+  `EMAIL_FROM`, `EMAIL_FROM_NAME`.
 
 `JWT_SECRET` debe usar el mismo valor (mínimo 32 caracteres) en ambos servicios.
 

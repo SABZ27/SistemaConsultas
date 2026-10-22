@@ -9,6 +9,10 @@ servicio Express expone los servicios externos (festivos, correos).
 
 Uso:
   python scripts/seguridad.py
+
+No se ejecuta automáticamente. Si crea datos, pide confirmación explícita por
+consola. Las contraseñas se leen por variable de entorno o por entrada oculta,
+nunca por argumento ni guardadas en archivos.
 """
 
 from __future__ import annotations
@@ -28,7 +32,7 @@ ADMIN_CORREO = os.environ.get("ADMIN_CORREO", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 
-PASSWORD = "contrasenia123"
+PASSWORD = os.environ.get("TEST_PASSWORD", "contrasenia123")
 TIMEOUT = 20.0
 
 _resultados: list[tuple[str, bool, str]] = []
@@ -45,6 +49,25 @@ def hdr(token=None):
 
 def _nar() -> str:
     return str(random.randint(100000, 999999)) + str(random.randint(1000, 9999))
+
+
+def _pedir_confirmacion() -> bool:
+    try:
+        resp = input("Este script puede crear datos de prueba. ¿Deseas continuar? (escribe SI para confirmar): ")
+    except Exception:
+        return False
+    return resp.strip().upper() == "SI"
+
+
+def _obtener_password() -> str:
+    if ADMIN_PASSWORD:
+        return ADMIN_PASSWORD
+    try:
+        import getpass
+
+        return getpass.getpass("Contraseña de administrador (entrada oculta): ")
+    except Exception:
+        return ""
 
 
 def login(client, correo, password):
@@ -66,15 +89,22 @@ def register(client, correo, identificacion, rol):
 
 
 def main() -> int:
-    if not (ADMIN_CORREO and ADMIN_PASSWORD and JWT_SECRET):
-        print("Faltan ADMIN_CORREO/ADMIN_PASSWORD/JWT_SECRET en el entorno.")
+    if not ADMIN_CORREO or not JWT_SECRET:
+        print("Faltan ADMIN_CORREO/JWT_SECRET en el entorno.")
+        return 2
+    if not _pedir_confirmacion():
+        print("Cancelado por el usuario.")
+        return 2
+    admin_password = _obtener_password()
+    if not admin_password:
+        print("Falta contraseña (ADMIN_PASSWORD o entrada oculta).")
         return 2
 
     fecha = date.today() + timedelta(days=1)
     marca = fecha.strftime("%H%M%S") + str(random.randint(100, 999))
 
     with httpx.Client(timeout=TIMEOUT) as client:
-        admin = login(client, ADMIN_CORREO, ADMIN_PASSWORD).json()
+        admin = login(client, ADMIN_CORREO, admin_password).json()
         admin_id = admin["id_usuario"]
         admin_token = admin["token"]
 

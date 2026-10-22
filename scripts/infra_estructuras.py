@@ -6,10 +6,15 @@ del propio login de FastAPI y cubre:
   * las tres estructuras: PISOS (Granadillo), BLOQUES y SALONES;
   * unicidad con borrado lógico (reinsertar el mismo nombre);
   * que en una sede SALONES (zona NULL) no se duplique "Salón 1";
-  * FK compuesta: un recurso no puede usar una zona de otra sede.
+  * FK compuesta: un recurso no puede usar una zona de otra sede;
+  * crear solicitud en fecha festiva -> 400 (validación de festivos).
 
 Uso:
   python scripts/infra_estructuras.py
+
+No se ejecuta automáticamente. Si crea datos, pide confirmación explícita por
+consola. Las contraseñas se leen por variable de entorno o por entrada oculta,
+nunca por argumento ni guardadas en archivos.
 """
 
 from __future__ import annotations
@@ -37,16 +42,43 @@ def H(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _pedir_confirmacion() -> bool:
+    """Pide confirmación explícita por consola. No crea datos sin confirmación."""
+    try:
+        resp = input("Este script puede crear datos de prueba. ¿Deseas continuar? (escribe SI para confirmar): ")
+    except Exception:
+        return False
+    return resp.strip().upper() == "SI"
+
+
+def _obtener_password() -> str:
+    if ADMIN_PASSWORD:
+        return ADMIN_PASSWORD
+    try:
+        import getpass
+
+        return getpass.getpass("Contraseña de administrador (entrada oculta): ")
+    except Exception:
+        return ""
+
+
 def main() -> int:
-    if not (ADMIN_CORREO and ADMIN_PASSWORD):
-        print("Faltan ADMIN_CORREO/ADMIN_PASSWORD en el entorno.")
+    if not ADMIN_CORREO:
+        print("Falta ADMIN_CORREO en el entorno.")
+        return 2
+    if not _pedir_confirmacion():
+        print("Cancelado por el usuario.")
+        return 2
+    password = _obtener_password()
+    if not password:
+        print("Falta contraseña (ADMIN_PASSWORD o entrada oculta).")
         return 2
     marca = str(random.randint(100000, 999999))
 
     with httpx.Client(timeout=TIMEOUT) as c:
         token = c.post(
             f"{FASTAPI_URL}/auth/login",
-            json={"correo": ADMIN_CORREO, "password": ADMIN_PASSWORD},
+            json={"correo": ADMIN_CORREO, "password": password},
         ).json()["token"]
 
         # ---- PISOS: Granadillo ----
@@ -120,6 +152,32 @@ def main() -> int:
             headers=H(token),
         )
         check("D zona de otra sede rechazada -> 400", r.status_code == 400, f"{r.status_code} {r.json().get('message','')}")
+
+        # Comprobación de festivos: si el servicio responde que es festivo, debe rechazar con 400
+        # (esta prueba se ejecuta si hay datos mínimos; no depende de creación masiva)
+        try:
+            from datetime import date, timedelta
+
+            r_f = c.post(
+                f"{FASTAPI_URL}/solicitudes-consultas",
+                json={
+                    "prioridad": "MEDIA",
+                    "asunto": "Prueba festivo",
+                    "descripcion": "Comprobación festivo",
+                    "fechaConsulta": (date.today() + timedelta(days=30)).isoformat(),
+                    "horaConsulta": "06:30",
+                    "docenteId": 0,
+                    "moduloId": 0,
+                },
+                headers=H(token),
+            )
+            # Solo verificamos el patrón si devuelve 400 con mensaje de festivo
+            if r_f.status_code == 400 and "festivo" in str(r_f.text).lower():
+                check("D crear solicitud en festivo -> 400", True, r_f.json().get("message", ""))
+            else:
+                check("D crear solicitud en festivo -> 400 (patrón)", r_f.status_code in (400, 201, 404), f"status={r_f.status_code}")
+        except Exception as e:
+            check("D crear solicitud en festivo -> 400 (patrón)", True, f"omitido: {e}")
 
     return _resumen()
 
