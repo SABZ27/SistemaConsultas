@@ -35,3 +35,26 @@ def decode_token(token: str) -> str:
     payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     sub = payload.get("sub")
     return sub if isinstance(sub, str) else None
+
+
+# Rol del token interno (servicio a servicio). El microservicio Express exige
+# este rol en POST /correos: solo el backend FastAPI puede pedir correos.
+ROL_SERVICIO = "SERVICIO"
+
+
+def crear_token_interno(minutos: int = 5) -> str:
+    """Token de servicio a servicio (mismo JWT_SECRET que el microservicio).
+
+    Se usa para las llamadas a Express que no son de un usuario (por ejemplo,
+    el envÃ­o de correos). Vive muy poco tiempo: solo debe servir para la
+    llamada en curso.
+    """
+    ahora = dt.datetime.now(dt.timezone.utc)
+    payload = {
+        "sub": "servicios@sistema.local",
+        "uid": 0,
+        "rol": ROL_SERVICIO,
+        "iat": ahora,
+        "exp": ahora + dt.timedelta(minutes=minutos),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")

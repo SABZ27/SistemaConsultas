@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -12,6 +12,7 @@ from app.schemas.auth import (
 )
 from app.schemas.usuario import RegistroUsuarioRequest
 from app.services.auth import AuthService
+from app.services.email import EmailService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -36,8 +37,15 @@ def iniciar_sesion(req: LoginRequest, db: Session = Depends(get_db)) -> LoginRes
 
 
 @router.post("/forgot-password")
-def olvidar_contrasenia(req: ForgotPasswordRequest, db: Session = Depends(get_db)) -> str:
-    AuthService(db).forgot_password(req)
+def olvidar_contrasenia(
+    req: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> str:
+    correo = AuthService(db).forgot_password(req)
+    if correo is not None:
+        # El correo se envía en segundo plano (después del commit).
+        background_tasks.add_task(EmailService().enviar, correo)
     return "Se ha generado un token de recuperación."
 
 

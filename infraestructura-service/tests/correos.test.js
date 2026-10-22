@@ -1,7 +1,7 @@
 const request = require('supertest');
 
 const crearApp = require('../src/app');
-const { auth, limpiarTablas, mockFetch, respuestaJson, pool } = require('./helpers');
+const { auth, authServicio, limpiarTablas, mockFetch, respuestaJson, pool } = require('./helpers');
 
 const app = crearApp();
 
@@ -44,7 +44,7 @@ afterAll(async () => {
 
 describe('POST /correos', () => {
   test('envía el correo y registra la traza completa', async () => {
-    const res = await request(app).post('/correos').set(auth()).send(CORREO);
+    const res = await request(app).post('/correos').set(authServicio()).send(CORREO);
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
@@ -71,7 +71,7 @@ describe('POST /correos', () => {
   test('la llamada a Brevo usa la API HTTP con la cabecera api-key', async () => {
     const fetchSpy = mockFetch(async () => respuestaJson(201, { messageId: '<abc123@ejemplo.com>' }));
 
-    await request(app).post('/correos').set(auth()).send(CORREO);
+    await request(app).post('/correos').set(authServicio()).send(CORREO);
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, opciones] = fetchSpy.mock.calls[0];
@@ -85,7 +85,7 @@ describe('POST /correos', () => {
   test('no reintenta el envío aunque el proveedor responda 500', async () => {
     const fetchSpy = mockFetch(async () => respuestaJson(500, { message: 'error' }));
 
-    const res = await request(app).post('/correos').set(auth()).send(CORREO);
+    const res = await request(app).post('/correos').set(authServicio()).send(CORREO);
 
     expect(res.status).toBe(502);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -96,7 +96,7 @@ describe('POST /correos', () => {
       throw new Error('fetch failed');
     });
 
-    const res = await request(app).post('/correos').set(auth()).send(CORREO);
+    const res = await request(app).post('/correos').set(authServicio()).send(CORREO);
 
     expect(res.status).toBe(502);
 
@@ -115,7 +115,7 @@ describe('POST /correos', () => {
   test('un error del proveedor deja el correo en FALLIDO y responde 502', async () => {
     mockFetch(async () => respuestaJson(400, { message: 'invalid' }));
 
-    const res = await request(app).post('/correos').set(auth()).send(CORREO);
+    const res = await request(app).post('/correos').set(authServicio()).send(CORREO);
 
     expect(res.status).toBe(502);
 
@@ -123,19 +123,35 @@ describe('POST /correos', () => {
     expect(correos[0].estado_envio).toBe('FALLIDO');
   });
 
-  test('cualquier usuario autenticado puede enviar correos', async () => {
+  test('un token de servicio (rol SERVICIO) puede enviar correos', async () => {
+    const res = await request(app).post('/correos').set(authServicio()).send(CORREO);
+
+    expect(res.status).toBe(201);
+  });
+
+  test('un token de usuario no puede enviar correos (403)', async () => {
+    const res = await request(app).post('/correos').set(auth()).send(CORREO);
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Forbidden');
+
+    const [correos] = await pool.query('SELECT * FROM correos_enviados');
+    expect(correos).toHaveLength(0);
+  });
+
+  test('un token de usuario con otro rol tampoco puede enviar correos (403)', async () => {
     const res = await request(app)
       .post('/correos')
       .set(auth(['INFRAESTRUCTURA'], 'TECNICO'))
       .send(CORREO);
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(403);
   });
 
   test('valida el cuerpo de la petición', async () => {
     const res = await request(app)
       .post('/correos')
-      .set(auth())
+      .set(authServicio())
       .send({ para: 'no-es-un-correo', asunto: '', contenido: 'texto' });
 
     expect(res.status).toBe(400);
@@ -147,7 +163,7 @@ describe('POST /correos', () => {
   test('sin API key configurada responde 503', async () => {
     process.env.EMAIL_PROVIDER_API_KEY = '';
 
-    const res = await request(app).post('/correos').set(auth()).send(CORREO);
+    const res = await request(app).post('/correos').set(authServicio()).send(CORREO);
 
     expect(res.status).toBe(503);
   });

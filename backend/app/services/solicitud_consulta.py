@@ -1,9 +1,14 @@
+import logging
 from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.exceptions.errors import BadRequestException, ResourceNotFoundException
+from app.clients.servicios_externos import ServiciosExternosClient
+from app.exceptions.errors import (
+    BadRequestException,
+    ResourceNotFoundException,
+)
 from app.mappers.solicitud_consulta import solicitud_consulta_response
 from app.models.enums import EstadoSolicitud, Rol
 from app.models.solicitud_consulta import SolicitudConsulta
@@ -23,16 +28,23 @@ from app.schemas.solicitud import (
     RegistroSolicitudConsultaRequest,
     UpdateSolicitudConsultaRequest,
 )
+from app.services.email import CorreoPendiente
 from app.services.evento_solicitud import EventoSolicitudService
 from app.services.notificacion import NotificacionService
 from app.services.recurso_fisico import ubicacion_recurso
 from app.utils.numero_consulta import guardar_con_numero_unico
 
+logger = logging.getLogger("sistema_consultas")
+
 NOMBRE_MODULO_GESTION = "GESTION_SOLICITUDES"
 
 
 class SolicitudConsultaService:
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        cliente_externos: ServiciosExternosClient | None = None,
+    ):
         self.db = db
         self.repo = SolicitudConsultaRepository(db)
         self.user_repo = UsuarioRepository(db)
@@ -44,13 +56,27 @@ class SolicitudConsultaService:
         self.periodo_repo = PeriodoAcademicoRepository(db)
         self.disponibilidad_repo = DisponibilidadDocenteRepository(db)
         self.recurso_repo = RecursoFisicoRepository(db)
+        self.cliente_externos = cliente_externos or ServiciosExternosClient()
 
-    def registrar(self, req: RegistroSolicitudConsultaRequest, usuario_actual: Usuario):
+    @property
+    def correos_pendientes(self) -> list[CorreoPendiente]:
+        """Correos que genera la operación (los envía la capa de API)."""
+        return self.notificacion_service.correos_pendientes
+
+    def registrar(
+        self,
+        req: RegistroSolicitudConsultaRequest,
+        usuario_actual: Usuario,
+        token: str,
+    ):
         estudiante = self._obtener_estudiante(usuario_actual)
         docente = self._obtener_docente(req.docenteId)
         modulo = self._obtener_modulo(req.moduloId)
 
         self._validar_periodo_vigente(req.fechaConsulta)
+        # El festivo se valida antes que la disponibilidad del docente para
+        # que el mensaje que ve el estudiante sea claro.
+        self._validar_festivo(req.fechaConsulta, token)
         self._validar_docente_asignado(docente.id, modulo.id)
         self._validar_disponibilidad(docente.id, req.fechaConsulta, req.horaConsulta)
 
@@ -107,6 +133,7 @@ class SolicitudConsultaService:
         id_solicitud: int,
         req: UpdateSolicitudConsultaRequest,
         usuario_actual: Usuario,
+        token: str,
     ):
         if req.fechaConsulta < date.today():
             raise BadRequestException(
@@ -118,6 +145,10 @@ class SolicitudConsultaService:
         fecha_anterior = solicitud.fecha_consulta
         hora_anterior = solicitud.hora_consulta
         destinatario = self._obtener_destinatario(solicitud, usuario_actual)
+
+        if req.fechaConsulta != fecha_anterior:
+            # Reprogramación: la nueva fecha tampoco puede ser festiva.
+            self._validar_festivo(req.fechaConsulta, token)
 
         cambio_agenda = req.fechaConsulta != fecha_anterior or req.horaConsulta != hora_anterior
         if cambio_agenda and (req.motivo is None or req.motivo.strip() == ""):
@@ -265,6 +296,37 @@ class SolicitudConsultaService:
             raise BadRequestException(
                 "La fecha de la consulta no corresponde a un periodo académico vigente."
             )
+
+    def _validar_festivo(self, fecha: date, token: str) -> None:
+        """Valida la fecha contra el servicio de festivos del microservicio.
+
+        Si la fecha es festiva se rechaza la operación con 400. Si el servicio
+        no está disponible la validación se omite (fail-open): la solicitud se
+        registra igual y se deja un aviso en el log, sin nombres, correos ni
+        identificadores.
+        """
+        try:
+            respuesta = self.cliente_externos.validar_festivo(fecha, token)
+        except Exception as error:  # fail-open: el servicio no debe tumbar la API
+            codigo_http = getattr(error, "codigo_http", None)
+            logger.warning(
+                "No se pudo validar el carácter festivo de la fecha %s: %s%s",
+                fecha.isoformat(),
+                getattr(error, "causa", None) or type(error).__name__,
+                (
+                    f" (HTTP {codigo_http})"
+                    if codigo_http in (401, 403)
+                    else ""
+                ),
+            )
+            return
+
+        if not respuesta.get("esFestivo"):
+            return
+
+        raise BadRequestException(
+            f"La fecha seleccionada es festivo: {respuesta.get('nombre') or 'Festivo'}"
+        )
 
     def _validar_docente_asignado(self, id_docente: int, id_modulo: int) -> None:
         if not self.docente_modulo_repo.existe_asignacion(id_docente, id_modulo):

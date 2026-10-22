@@ -34,3 +34,43 @@ def _limpiar_bd(_esquema):
 def client():
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def servicios_externos(monkeypatch):
+    """Las pruebas nunca salen a la red.
+
+    Se parchean los mÃ©todos del cliente de servicios externos (no httpx), de
+    modo que la suite es determinista y no depende de que Express estÃ©
+    levantado. Devuelve el registro de llamadas para poder verificar quÃ© se
+    pidiÃ³ al microservicio.
+    """
+    from app.clients.servicios_externos import ServiciosExternosClient
+
+    llamadas = {"festivos": [], "correos": []}
+
+    def _validar_festivo(self, fecha, token):
+        llamadas["festivos"].append({"fecha": fecha.isoformat(), "token": token})
+        return {
+            "id": None,
+            "fecha": fecha.isoformat(),
+            "pais": "CO",
+            "esFestivo": False,
+            "nombre": None,
+        }
+
+    def _enviar_correo(self, para, asunto, contenido, token, para_nombre=None):
+        llamadas["correos"].append(
+            {
+                "para": para,
+                "asunto": asunto,
+                "contenido": contenido,
+                "token": token,
+                "paraNombre": para_nombre,
+            }
+        )
+        return {"id": 1, "messageId": "fake", "estadoEnvio": "ENVIADO"}
+
+    monkeypatch.setattr(ServiciosExternosClient, "validar_festivo", _validar_festivo)
+    monkeypatch.setattr(ServiciosExternosClient, "enviar_correo", _enviar_correo)
+    return llamadas

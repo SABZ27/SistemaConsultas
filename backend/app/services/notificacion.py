@@ -11,7 +11,7 @@ from app.repositories.notificacion import NotificacionRepository
 from app.repositories.solicitud_consulta import SolicitudConsultaRepository
 from app.repositories.usuario import UsuarioRepository
 from app.schemas.notificacion import RegistroNotificacionRequest
-from app.services.email import EmailService
+from app.services.email import CorreoPendiente
 
 
 class NotificacionService:
@@ -20,7 +20,9 @@ class NotificacionService:
         self.repo = NotificacionRepository(db)
         self.user_repo = UsuarioRepository(db)
         self.solicitud_repo = SolicitudConsultaRepository(db)
-        self.email_service = EmailService()
+        # Correos que el servicio deja pendiente de envío. Los despacha la
+        # capa de API en segundo plano (después del commit de la transacción).
+        self.correos_pendientes: list[CorreoPendiente] = []
 
     def _obtener_usuario(self, id_usuario: int) -> Usuario:
         usuario = self.user_repo.find_by_id_and_estado_true(id_usuario)
@@ -53,10 +55,13 @@ class NotificacionService:
 
         notificacion_guardada = self.repo.save(notificacion)
         if request.tipo != TipoNotificacion.COMENTARIO:
-            self.email_service.enviar(
-                para=destinatario.correo,
-                asunto=notificacion.titulo,
-                contenido=notificacion.mensaje,
+            self.correos_pendientes.append(
+                CorreoPendiente(
+                    para=destinatario.correo,
+                    para_nombre=f"{destinatario.nombre} {destinatario.apellido}",
+                    asunto=notificacion.titulo,
+                    contenido=notificacion.mensaje,
+                )
             )
         return notificacion_guardada
 

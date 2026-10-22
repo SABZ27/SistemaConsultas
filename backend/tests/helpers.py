@@ -247,7 +247,7 @@ def asegurar_periodo_cubre(client, token, fecha_consulta):
     db = SessionLocal()
     try:
         repo = PeriodoAcademicoRepository(db)
-        if repo.find_periodo_vigente(fecha_consulta) is None:
+        if repo.find_vigente(fecha_consulta) is None:
             crear_periodo(client, token, nombre=f'Periodo-Cobertura-{_next()}', fecha_inicio=fecha_consulta, fecha_fin=fecha_consulta)
     finally:
         db.close()

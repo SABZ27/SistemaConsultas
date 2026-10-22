@@ -30,6 +30,13 @@ function auth(modulos = ['INFRAESTRUCTURA'], rol = 'ADMINISTRADOR') {
   return { Authorization: `Bearer ${token({ modulos, rol })}` };
 }
 
+// Token de servicio a servicio (rol SERVICIO). Es el que firma el backend
+// FastAPI para enviar correos: el microservicio solo acepta este rol en
+// POST /correos.
+function authServicio() {
+  return { Authorization: `Bearer ${token({ modulos: [], rol: 'SERVICIO' })}` };
+}
+
 // Los proveedores externos se buscan por nombre, asi que la semilla debe
 // existir siempre que se prueba.
 async function sembrarServicios() {
@@ -72,6 +79,7 @@ function mockFetch(impl) {
 module.exports = {
   token,
   auth,
+  authServicio,
   limpiarTablas,
   sembrarServicios,
   SERVICIOS,

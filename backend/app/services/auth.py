@@ -21,7 +21,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
 )
 from app.schemas.usuario import RegistroUsuarioRequest
-from app.services.email import EmailService
+from app.services.email import CorreoPendiente
 from app.services.usuario import UsuarioService
 
 
@@ -31,7 +31,6 @@ class AuthService:
         self.user_repo = UsuarioRepository(db)
         self.mxl_repo = ModuloXRolRepository(db)
         self.token_repo = PasswordResetTokenRepository(db)
-        self.email_service = EmailService()
         self.usuario_service = UsuarioService(db)
 
     def login(self, req: LoginRequest) -> LoginResponse:
@@ -75,7 +74,7 @@ class AuthService:
             )
         self.usuario_service.crear_usuario(req)
 
-    def forgot_password(self, req: ForgotPasswordRequest) -> None:
+    def forgot_password(self, req: ForgotPasswordRequest) -> CorreoPendiente | None:
         usuario = self.user_repo.find_by_correo_and_estado_true(req.correo)
         if usuario is None:
             raise BadRequestException("No existe un usuario registrado con ese correo.")
@@ -90,8 +89,9 @@ class AuthService:
                 utilizado=False,
             )
         )
-        self.email_service.enviar(
+        return CorreoPendiente(
             para=usuario.correo,
+            para_nombre=f"{usuario.nombre} {usuario.apellido}",
             asunto="Recuperación de contraseña",
             contenido=(
                 f"Hola {usuario.nombre},\n\n"
