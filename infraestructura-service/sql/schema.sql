@@ -1,76 +1,82 @@
 -- ============================================================================
--- Esquema de infraestructura fisica (MySQL 8, InnoDB, utf8mb4)
+-- Esquema de servicios externos (MySQL 8, InnoDB, utf8mb4)
 -- ============================================================================
--- Tablas: sedes, zonas, recursos_fisicos.
+-- Tablas: servicios_externos, consultas_servicio_externo, festivos,
+--         correos_enviados.
 --
--- Todas las tablas incluyen:
---   * id             INT UNSIGNED PK AUTO_INCREMENT (llave primaria)
---   * estado         TINYINT(1) NOT NULL DEFAULT 1 (borrado logico; 0 = eliminado)
---   * creado         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
---   * actualizado    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
---                    ON UPDATE CURRENT_TIMESTAMP
---   * al menos un indice unico
+-- La infraestructura fisica (sedes, zonas, recursos_fisicos) vive en
+-- PostgreSQL dentro de FastAPI. Este servicio solo resuelve datos de terceros:
+--   * Nager.Date -> dias festivos
+--   * Brevo      -> correo transaccional (API HTTP, no SMTP)
 --
--- Los indices unicos usan columnas generadas (nombre_activo, zona_key) que
--- valen NULL cuando la fila esta inactiva, de modo que el borrado logico
--- libera el valor unico y permite reactivar reutilizando el mismo nombre.
---
--- Estructuras de sede:
---   * BLOQUES: la sede se divide en bloques (A, B, C...); los recursos
---              cuelgan de una zona (bloque).
---   * SALONES: sin subdivision; los recursos (Salon 1..30) cuelgan de la sede.
---   * PISOS:   el edificio se divide en pisos; los recursos cuelgan de un piso.
---
--- Este archivo es idempotente (CREATE TABLE IF NOT EXISTS) y es el que monta
--- docker-compose para inicializar la base. No se siembran datos.
+-- El orden de creacion importa por las claves foraneas.
+-- Es idempotente: CREATE TABLE IF NOT EXISTS.
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS sedes (
-    id              INT UNSIGNED    NOT NULL AUTO_INCREMENT,
-    nombre          VARCHAR(100)    NOT NULL,
-    tipo_estructura ENUM('BLOQUES', 'SALONES', 'PISOS') NOT NULL,
-    estado          TINYINT(1)      NOT NULL DEFAULT 1,
-    creado          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    actualizado     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    nombre_activo   VARCHAR(100) GENERATED ALWAYS AS (IF(estado = 1, nombre, NULL)) STORED,
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_sedes_nombre_activo (nombre_activo)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS servicios_externos (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(80) NOT NULL,
+  url_base VARCHAR(255) NOT NULL,
+  descripcion VARCHAR(255) NULL,
+  estado TINYINT(1) NOT NULL DEFAULT 1,
+  creado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_servicios_externos_nombre UNIQUE (nombre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS zonas (
-    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    sede_id       INT UNSIGNED NOT NULL,
-    nombre        VARCHAR(100) NOT NULL,
-    estado        TINYINT(1)   NOT NULL DEFAULT 1,
-    creado        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    actualizado   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    nombre_activo VARCHAR(100) GENERATED ALWAYS AS (IF(estado = 1, nombre, NULL)) STORED,
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_zonas_sede_nombre_activo (sede_id, nombre_activo),
-    -- Necesario para la FK compuesta de recursos_fisicos (zona_id, sede_id).
-    UNIQUE KEY uq_zonas_id_sede (id, sede_id),
-    CONSTRAINT fk_zonas_sede FOREIGN KEY (sede_id) REFERENCES sedes (id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS recursos_fisicos (
-    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    sede_id       INT UNSIGNED NOT NULL,
-    zona_id       INT UNSIGNED NULL,
-    nombre        VARCHAR(100) NOT NULL,
-    tipo          ENUM('SALON', 'LABORATORIO', 'AUDITORIO', 'SALA', 'OFICINA')
-                  NOT NULL DEFAULT 'SALON',
-    estado        TINYINT(1)   NOT NULL DEFAULT 1,
-    creado        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    actualizado   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    nombre_activo VARCHAR(100) GENERATED ALWAYS AS (IF(estado = 1, nombre, NULL)) STORED,
-    -- En MySQL, un indice UNIQUE normal no evita duplicados cuando hay NULL.
-    -- zona_key reemplaza NULL por 0 para que el unico cubra las sedes sin zonas.
-    zona_key      INT UNSIGNED GENERATED ALWAYS AS (IFNULL(zona_id, 0)) STORED,
-    PRIMARY KEY (id),
-    UNIQUE KEY uq_recursos_sede_zona_nombre (sede_id, zona_key, nombre_activo),
-    CONSTRAINT fk_recursos_sede FOREIGN KEY (sede_id) REFERENCES sedes (id),
-    -- FK compuesta: garantiza que la zona pertenece a la misma sede.
-    -- Si zona_id es NULL, MySQL (MATCH SIMPLE) no evalua la restriccion.
-    CONSTRAINT fk_recursos_zona_sede
-        FOREIGN KEY (zona_id, sede_id) REFERENCES zonas (id, sede_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS consultas_servicio_externo (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  servicio_id BIGINT UNSIGNED NOT NULL,
+  referencia CHAR(36) NOT NULL,
+  endpoint VARCHAR(255) NOT NULL,
+  codigo_http SMALLINT NULL,
+  exito TINYINT(1) NOT NULL DEFAULT 0,
+  duracion_ms INT UNSIGNED NULL,
+  detalle VARCHAR(255) NULL,
+  estado TINYINT(1) NOT NULL DEFAULT 1,
+  creado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_consultas_servicio_referencia UNIQUE (referencia),
+  CONSTRAINT fk_consultas_servicio FOREIGN KEY (servicio_id)
+    REFERENCES servicios_externos (id) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE IF NOT EXISTS festivos (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  servicio_id BIGINT UNSIGNED NOT NULL,
+  consulta_servicio_id BIGINT UNSIGNED NULL,
+  fecha DATE NOT NULL,
+  pais CHAR(2) NOT NULL DEFAULT 'CO',
+  nombre VARCHAR(150) NOT NULL,
+  anio SMALLINT NOT NULL,
+  estado TINYINT(1) NOT NULL DEFAULT 1,
+  creado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_festivos_fecha_pais UNIQUE (fecha, pais),
+  KEY idx_festivos_anio (anio),
+  CONSTRAINT fk_festivos_servicio FOREIGN KEY (servicio_id)
+    REFERENCES servicios_externos (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_festivos_consulta FOREIGN KEY (consulta_servicio_id)
+    REFERENCES consultas_servicio_externo (id) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE IF NOT EXISTS correos_enviados (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  servicio_id BIGINT UNSIGNED NOT NULL,
+  consulta_servicio_id BIGINT UNSIGNED NOT NULL,
+  destinatario VARCHAR(150) NOT NULL,
+  asunto VARCHAR(200) NOT NULL,
+  estado_envio ENUM('ENVIADO','FALLIDO') NOT NULL,
+  respuesta_proveedor VARCHAR(255) NULL,
+  estado TINYINT(1) NOT NULL DEFAULT 1,
+  creado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_correos_consulta UNIQUE (consulta_servicio_id),
+  CONSTRAINT fk_correos_servicio FOREIGN KEY (servicio_id)
+    REFERENCES servicios_externos (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_correos_consulta FOREIGN KEY (consulta_servicio_id)
+    REFERENCES consultas_servicio_externo (id) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -24,6 +24,26 @@ const env = {
     .split(',')
     .map((origen) => origen.trim())
     .filter(Boolean),
+  // Proveedores externos. La url_base de cada uno vive en la tabla
+  // servicios_externos; si la fila no esta sembrada el servicio responde 503.
+  externos: {
+    nagerPais: (process.env.NAGER_PAIS || 'CO').toUpperCase(),
+    httpTimeoutMs: numero(process.env.HTTP_TIMEOUT_MS, 15000),
+  },
+  // Se leen en cada llamada (getters) para que las pruebas puedan ajustar el
+  // entorno sin recargar el modulo. La API key de Brevo NUNCA va en la base de
+  // datos: solo vive en la variable de entorno.
+  email: {
+    get providerApiKey() {
+      return process.env.EMAIL_PROVIDER_API_KEY || '';
+    },
+    get from() {
+      return process.env.EMAIL_FROM || '';
+    },
+    get fromName() {
+      return process.env.EMAIL_FROM_NAME || '';
+    },
+  },
 };
 
 module.exports = env;

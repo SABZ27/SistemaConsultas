@@ -4,6 +4,9 @@ Requiere FastAPI (http://127.0.0.1:8080) y Express (http://127.0.0.1:3001)
 arriba, y las variables ADMIN_CORREO, ADMIN_PASSWORD y JWT_SECRET
 (este último para poder forjar/expirar tokens).
 
+La infraestructura física (sedes, zonas, recursos) se consulta en FastAPI; el
+servicio Express expone los servicios externos (festivos, correos).
+
 Uso:
   python scripts/seguridad.py
 """
@@ -121,12 +124,12 @@ def main() -> int:
         sid = solicitud["id"]
 
         sede = client.post(
-            f"{INFRA_URL}/sedes",
+            f"{FASTAPI_URL}/sedes",
             json={"nombre": f"Sede seg {marca}", "tipoEstructura": "SALONES"},
             headers=hdr(admin_token),
         ).json()
         recurso = client.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": sede["id"], "nombre": f"Salón seg {marca}", "tipo": "SALON"},
             headers=hdr(admin_token),
         ).json()
@@ -149,7 +152,7 @@ def main() -> int:
             ("POST /programas", client.post(f"{FASTAPI_URL}/programas", json={"nombre": "x"})),
             ("POST /modulos", client.post(f"{FASTAPI_URL}/modulos", json={"nombre": "x", "descripcion": "1234567890"})),
             ("GET /usuarios", client.get(f"{FASTAPI_URL}/usuarios")),
-            ("Express POST /sedes", client.post(f"{INFRA_URL}/sedes", json={"nombre": "x", "tipoEstructura": "BLOQUES"})),
+            ("Express POST /correos", client.post(f"{INFRA_URL}/correos", json={"para": "a@b.com", "asunto": "x", "contenido": "y"})),
         ]
         for nombre, r in sin_token:
             check(f"F4 sin token -> 401: {nombre}", r.status_code == 401, f"{r.status_code}")
@@ -191,7 +194,7 @@ def main() -> int:
         firma_alterada = admin_token[:-4] + ("aaaa" if admin_token[-4:] != "aaaa" else "bbbb")
         r = client.get(f"{FASTAPI_URL}/auth/me", headers=hdr(firma_alterada))
         check("F7a firma alterada -> 401 FastAPI", r.status_code == 401, f"{r.status_code}")
-        r = client.get(f"{INFRA_URL}/sedes", headers=hdr(firma_alterada))
+        r = client.get(f"{INFRA_URL}/servicios-externos", headers=hdr(firma_alterada))
         check("F7b firma alterada -> 401 Express", r.status_code == 401, f"{r.status_code}")
 
         # --- F8: token expirado -> 401 en ambos ---
@@ -210,7 +213,7 @@ def main() -> int:
         )
         r = client.get(f"{FASTAPI_URL}/auth/me", headers=hdr(expirado))
         check("F8a token expirado -> 401 FastAPI", r.status_code == 401, f"{r.status_code}")
-        r = client.get(f"{INFRA_URL}/sedes", headers=hdr(expirado))
+        r = client.get(f"{INFRA_URL}/servicios-externos", headers=hdr(expirado))
         check("F8b token expirado -> 401 Express", r.status_code == 401, f"{r.status_code}")
 
         # --- F9: usuario desactivado no puede iniciar sesión ---
@@ -219,14 +222,14 @@ def main() -> int:
         r = login(client, f"inactiva.seg.{marca}@test.com", PASSWORD)
         check("F9b usuario desactivado no puede iniciar sesión -> 401", r.status_code == 401, f"{r.status_code}")
 
-        # --- F10: el Bearer se reenvía a Express al asignar (positivo), y sin permiso es 403 ---
+        # --- F10: el docente asignado puede asignar el recurso ---
         r = client.patch(
             f"{FASTAPI_URL}/solicitudes-consultas/{sid}/recurso-fisico",
             json={"recursoFisicoId": recurso["id"]},
             headers=hdr(docente["token"]),
         )
         ok = r.status_code == 200 and r.json().get("nombreRecursoFisico") == recurso.get("ubicacion")
-        check("F10a docente asignado asigna recurso (Bearer reenviado a Express)", ok, f"{r.status_code} ubicacion={r.json().get('nombreRecursoFisico') if r.status_code==200 else '-'!r}")
+        check("F10a docente asignado asigna recurso", ok, f"{r.status_code} ubicacion={r.json().get('nombreRecursoFisico') if r.status_code==200 else '-'!r}")
 
     return _resumen()
 

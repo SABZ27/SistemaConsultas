@@ -1,7 +1,7 @@
 {
   "name": "infraestructura-service",
   "version": "1.0.0",
-  "description": "Servicio de infraestructura fisica (sedes, zonas y recursos) sobre MySQL para el Sistema de Consultas.",
+  "description": "Servicio de servicios externos (dias festivos con Nager.Date y correo con Brevo) sobre MySQL para el Sistema de Consultas.",
   "main": "src/server.js",
   "engines": {
     "node": "24.x"
@@ -10,6 +10,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "db:init": "node scripts/init-db.js",
+    "db:init:drop-legacy": "node scripts/init-db.js --drop-legacy",
     "test": "jest --runInBand --forceExit"
   },
   "dependencies": {

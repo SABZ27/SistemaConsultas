@@ -1,14 +1,16 @@
-﻿"""Prueba de extremo a extremo (e2e) del Sistema de Consultas.
+"""Prueba de extremo a extremo (e2e) del Sistema de Consultas.
 
 Ejercita los dos servicios en ejecución:
-  * FastAPI (backend)          -> http://127.0.0.1:8080
-  * Express (infraestructura)  -> http://127.0.0.1:3001
+  * FastAPI (backend)          -> http://127.0.0.1:8080  (datos y arquitectura)
+  * Express (servicios ext.)   -> http://127.0.0.1:3001  (festivos y correo)
+
+La infraestructura física (sedes, zonas, recursos) vive en FastAPI (PostgreSQL).
 
 Modos:
   full   (por defecto): flujo completo de la Fase E + sonda "sin módulo
-           INFRAESTRUCTURA -> 403" al escribir en Express.
-  caido  : con Express detenido, asignar un recurso físico debe responder
-           503 ("Servicio de infraestructura no disponible").
+           INFRAESTRUCTURA -> 403" al escribir en FastAPI.
+  caido  : con Express detenido, la asignación de un recurso físico debe
+           seguir funcionando (FastAPI ya no depende de Express para eso).
 
 Configuración por variables de entorno (nunca se imprimen secretos):
   FASTAPI_URL, INFRA_URL, ADMIN_CORREO, ADMIN_PASSWORD
@@ -95,28 +97,28 @@ def modo_full() -> int:
         modulos_admin = {m["nombre"] for m in (admin.get("modulos") or [])}
         registrar("admin tiene módulo INFRAESTRUCTURA", "INFRAESTRUCTURA" in modulos_admin)
 
-        # ---- 1) Infraestructura en Express: sede PISOS -> piso -> salón ----
+        # ---- 1) Infraestructura en FastAPI: sede PISOS -> piso -> salón ----
         r = _post(
             client,
-            f"{INFRA_URL}/sedes",
+            f"{FASTAPI_URL}/sedes",
             {"nombre": f"Sede E2E {marca}", "tipoEstructura": "PISOS"},
             admin["token"],
         )
         sede = r.json() if r.status_code == 201 else {}
-        registrar("Express: crear sede PISOS", r.status_code == 201, f"{r.status_code}")
+        registrar("FastAPI: crear sede PISOS", r.status_code == 201, f"{r.status_code}")
 
         r = _post(
             client,
-            f"{INFRA_URL}/zonas",
+            f"{FASTAPI_URL}/zonas",
             {"sedeId": sede.get("id"), "nombre": f"Piso {marca}"},
             admin["token"],
         )
         zona = r.json() if r.status_code == 201 else {}
-        registrar("Express: crear piso (zona)", r.status_code == 201, f"{r.status_code}")
+        registrar("FastAPI: crear piso (zona)", r.status_code == 201, f"{r.status_code}")
 
         r = _post(
             client,
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             {
                 "sedeId": sede.get("id"),
                 "zonaId": zona.get("id"),
@@ -126,7 +128,7 @@ def modo_full() -> int:
             admin["token"],
         )
         recurso = r.json() if r.status_code == 201 else {}
-        registrar("Express: crear salón (recurso)", r.status_code == 201, f"{r.status_code}")
+        registrar("FastAPI: crear salón (recurso)", r.status_code == 201, f"{r.status_code}")
 
         # ---- 2) Datos académicos en FastAPI ----
         r = _post(
@@ -203,7 +205,7 @@ def modo_full() -> int:
         )
         sid = solicitud.get("id")
 
-        # ---- 4) Asignar recurso físico (FastAPI -> Express, reenvía Bearer) ----
+        # ---- 4) Asignar recurso físico (FastAPI lo resuelve en PostgreSQL) ----
         r = _patch(
             client,
             f"{FASTAPI_URL}/solicitudes-consultas/{sid}/recurso-fisico",
@@ -216,7 +218,7 @@ def modo_full() -> int:
             and r.json().get("recursoFisicoId") == recurso.get("id")
             and "Piso" in ubic
         )
-        registrar("Asignar recurso reenvía Bearer y guarda ubicación", ok_recurso, f"{r.status_code} ubicacion={ubic!r}")
+        registrar("Asignar recurso guarda la ubicación", ok_recurso, f"{r.status_code} ubicacion={ubic!r}")
 
         # ---- 5) Transiciones de estado válidas: EN_PROCESO -> RESUELTA ----
         r = _patch(
@@ -273,14 +275,14 @@ def modo_full() -> int:
         r = _get(client, f"{FASTAPI_URL}/notificaciones", estudiante["token"])
         registrar("Notificaciones del estudiante", r.status_code == 200 and len(r.json()) >= 1, f"{r.status_code} n={len(r.json()) if r.status_code == 200 else '-'}")
 
-        # ---- 10) Sonda: sin módulo INFRAESTRUCTURA -> 403 al escribir en Express ----
+        # ---- 10) Sonda: sin módulo INFRAESTRUCTURA -> 403 al escribir en FastAPI ----
         r = _post(
             client,
-            f"{INFRA_URL}/sedes",
+            f"{FASTAPI_URL}/sedes",
             {"nombre": f"Sede prohibida {marca}", "tipoEstructura": "BLOQUES"},
             estudiante["token"],
         )
-        registrar("Express: sin módulo INFRAESTRUCTURA -> 403", r.status_code == 403, f"{r.status_code}")
+        registrar("FastAPI: sin módulo INFRAESTRUCTURA -> 403", r.status_code == 403, f"{r.status_code}")
 
     return _resumen()
 
@@ -332,17 +334,34 @@ def modo_caido() -> int:
         )
         solicitud = r.json()
 
+        # La infraestructura vive en PostgreSQL: con Express (servicios externos)
+        # caído, asignar el recurso físico debe seguir funcionando.
+        r = _post(
+            client,
+            f"{FASTAPI_URL}/sedes",
+            {"nombre": f"Sede caída {marca}", "tipoEstructura": "SALONES"},
+            admin["token"],
+        )
+        sede = r.json() if r.status_code == 201 else {}
+        r = _post(
+            client,
+            f"{FASTAPI_URL}/recursos-fisicos",
+            {"sedeId": sede.get("id"), "nombre": f"Salón caído {marca}", "tipo": "SALON"},
+            admin["token"],
+        )
+        recurso = r.json() if r.status_code == 201 else {}
+
         r = _patch(
             client,
             f"{FASTAPI_URL}/solicitudes-consultas/{solicitud['id']}/recurso-fisico",
-            {"recursoFisicoId": 1},
+            {"recursoFisicoId": recurso.get("id")},
             docente["token"],
         )
-        body = r.json()
+        body = r.json() if r.status_code == 200 else {}
         registrar(
-            "Express caído -> 503 infraestructura no disponible",
-            r.status_code == 503 and body.get("message") == "Servicio de infraestructura no disponible",
-            f"{r.status_code} {body.get('message', '')}",
+            "Express caído -> la asignación de recurso sigue funcionando",
+            r.status_code == 200 and body.get("recursoFisicoId") == recurso.get("id"),
+            f"{r.status_code} {body.get('nombreRecursoFisico', '')}",
         )
     return _resumen()
 

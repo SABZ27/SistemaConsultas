@@ -1,8 +1,5 @@
 const { extraerToken, verificarToken } = require('../utils/jwt');
 const { noAutorizado, prohibido } = require('../utils/errores');
-const { incluirInactivos } = require('../utils/query');
-
-const MODULO_INFRAESTRUCTURA = 'INFRAESTRUCTURA';
 
 function autenticar(req, _res, next) {
   const token = extraerToken(req);
@@ -20,28 +17,15 @@ function autenticar(req, _res, next) {
   return next();
 }
 
-function tieneInfraestructura(req) {
-  const modulos = req.usuario && Array.isArray(req.usuario.modulos) ? req.usuario.modulos : [];
-  return modulos.includes(MODULO_INFRAESTRUCTURA);
+// Exige que el token tenga el rol indicado (por ejemplo ADMINISTRADOR).
+function requiereRol(rol) {
+  return (req, _res, next) => {
+    const rolUsuario = req.usuario ? req.usuario.rol : null;
+    if (rolUsuario !== rol) {
+      return next(prohibido());
+    }
+    return next();
+  };
 }
 
-function requiereInfraestructura(req, _res, next) {
-  if (!tieneInfraestructura(req)) {
-    return next(prohibido());
-  }
-  return next();
-}
-
-function requiereInfraestructuraSiInactivos(req, _res, next) {
-  if (incluirInactivos(req) && !tieneInfraestructura(req)) {
-    return next(prohibido());
-  }
-  return next();
-}
-
-module.exports = {
-  autenticar,
-  requiereInfraestructura,
-  requiereInfraestructuraSiInactivos,
-  MODULO_INFRAESTRUCTURA,
-};
+module.exports = { autenticar, requiereRol };

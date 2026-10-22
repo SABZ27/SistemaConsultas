@@ -1,34 +1,66 @@
 # infraestructura-service
 
-Microservicio de **infraestructura física** (sedes, zonas y recursos físicos) para el
-Sistema de Consultas. Implementado con **Node 24 + Express** sobre **MySQL 8 (InnoDB, utf8mb4)**.
+Microservicio de **servicios externos** para el Sistema de Consultas. Implementado con
+**Node 24 + Express** sobre **MySQL 8 (InnoDB, utf8mb4)**.
 
-Forma parte del monorepo junto al backend FastAPI (`backend/`) y comparte el mismo
-`JWT_SECRET`. El backend FastAPI lo consume en la Fase 4 para validar y resolver recursos.
+Responsabilidades:
+
+- **Días festivos** desde la API pública de **Nager.Date** (`https://date.nager.at/api/v4`).
+- **Envío de correo** desde la **API HTTP de Brevo** (`https://api.brevo.com/v3`), nunca SMTP.
+- **Bitácora** de cada llamada a un proveedor externo.
+
+La infraestructura física (sedes, zonas y recursos físicos) vive en **PostgreSQL dentro del
+backend FastAPI** (`backend/`); este servicio ya no la administra.
 
 ## Modelo de datos
 
-Tres tablas. Todas incluyen `id` (PK AUTO_INCREMENT), `estado` (TINYINT(1), default 1,
-borrado lógico), `creado` y `actualizado` (gestionados por MySQL) y al menos un índice único.
+Cuatro tablas. Todas incluyen `id` (PK AUTO_INCREMENT), `estado` (TINYINT(1), default 1,
+borrado lógico), `creado` y `actualizado` (gestionados por MySQL).
 
-- **sedes**: `nombre`, `tipo_estructura` ENUM(`BLOQUES`, `SALONES`, `PISOS`).
-- **zonas** (bloque o piso según la sede): `sede_id` (FK), `nombre` ("Bloque A", "Piso 2").
-- **recursos_fisicos**: `sede_id` (FK), `zona_id` (FK nullable), `nombre`, `tipo`
-  ENUM(`SALON`, `LABORATORIO`, `AUDITORIO`, `SALA`, `OFICINA`).
+- **servicios_externos**: catálogo de proveedores. `nombre` (único, es la clave lógica:
+  `Nager.Date` o `Brevo`), `url_base`, `descripcion`.
+- **consultas_servicio_externo**: bitácora de las llamadas. `servicio_id` (FK),
+  `referencia` (UUID), `endpoint`, `codigo_http`, `exito`, `duracion_ms`, `detalle`.
+- **festivos**: cache local de los festivos. `servicio_id` (FK), `consulta_servicio_id` (FK
+  nullable), `fecha`, `pais`, `nombre` (en español), `anio`. Único `UNIQUE (fecha, pais)`.
+- **correos_enviados**: `servicio_id` (FK), `consulta_servicio_id` (FK, único),
+  `destinatario`, `asunto`, `estado_envio` ENUM(`ENVIADO`, `FALLIDO`), `respuesta_proveedor`.
 
-El borrado es lógico: los índices únicos usan columnas generadas (`nombre_activo`,
-`zona_key`) que valen `NULL` cuando la fila está inactiva, de modo que el nombre se libera
-y puede reutilizarse. Una FK compuesta `(zona_id, sede_id) -> zonas(id, sede_id)` garantiza
-que la zona pertenece a la misma sede del recurso.
+El esquema completo está en [`sql/schema.sql`](sql/schema.sql) y es idempotente
+(`CREATE TABLE IF NOT EXISTS`).
 
-### Estructuras de sede
+### Reglas de negocio
 
-- **BLOQUES**: la sede se divide en bloques (A, B, C…); los recursos cuelgan de un bloque.
-- **SALONES**: sin subdivisión; los recursos (Salón 1 al 30) cuelgan directo de la sede.
-- **PISOS**: el edificio se divide en pisos; los recursos cuelgan de un piso.
+- Los proveedores se buscan **por nombre** (`Nager.Date`, `Brevo`); si la fila no existe o
+  está inactiva el servicio responde **503**.
+- Cada llamada externa inserta su fila en `consultas_servicio_externo` **después** de la
+  llamada; su `id` es al que apuntan `festivos.consulta_servicio_id` y
+  `correos_enviados.consulta_servicio_id`.
+- Un error de red (sin respuesta) **también se registra**: `codigo_http` NULL, `exito = 0`,
+  `detalle = 'sin respuesta'`; el correo queda en `FALLIDO` y la API responde **502**.
+- El `detalle` es un texto breve y saneado: nunca se guardan correos ni datos personales.
+- La cache de festivos se filtra siempre por `pais` + `anio` + `estado = 1`. El `upsert`
+  usa `UNIQUE (fecha, pais)` y **nunca cambia `estado`**: un festivo desactivado no se
+  resucita al resincronizar y no se vuelve a llamar al proveedor.
+- El borrado de un festivo es lógico (`estado = 0`) y **solo lo puede hacer el rol
+  `ADMINISTRADOR`**; el resto de usuarios recibe **403**.
+- `POST /correos` lo puede usar **cualquier usuario autenticado**.
 
-Ejemplo de referencia (solo documentación/tests): sede **"Granadillo"**, tipo `PISOS`,
-Piso 1 a Piso 5 con Salón 1 a Salón 6 en cada piso.
+### Corrección Ley Emiliani sobre datos de Nager.Date
+
+En Colombia los festivos eclesiásticos móviles se observan el **lunes siguiente**
+(Ley Emiliani, Ley 51 de 1883 y determinaciones del Ministerio del Interior), no el día de
+la plegaria. Nager.Date devuelve el día de la plegaria, por ejemplo para 2026:
+
+| Festivo | Nager.Date (plegaria) | Fecha oficial (lunes) |
+|---|---|---|
+| `Ascension Day` | 2026-05-14 (jueves) | **2026-05-18** |
+| `Corpus Christi` | 2026-06-04 (jueves) | **2026-06-08** |
+
+El servicio corrige **solo** esos dos festivos: si la fecha no cae en lunes se mueve al
+lunes siguiente antes de guardarse (actualizando también el año si el traslado cruza el
+cambio de año). Ningún otro festivo se modifica (por ejemplo `Sacred Heart` ya lo publica
+el lunes, 2026-06-15). La lógica vive en [`src/utils/leyEmiliani.js`](src/utils/leyEmiliani.js).
 
 ## Instalación
 
@@ -36,7 +68,7 @@ Requiere Node 24+ y MySQL 8.
 
 ```bash
 cd infraestructura-service
-cp .env.example .env      # completa DB_* y JWT_SECRET
+cp .env.example .env      # completa DB_*, JWT_SECRET y EMAIL_*
 npm install
 ```
 
@@ -44,16 +76,28 @@ npm install
 
 ```bash
 docker compose up -d mysql
-# El contenedor monta sql/schema.sql y crea la base automáticamente.
 ```
 
 ### MySQL local
 
 ```bash
-npm run db:init           # crea la base (DB_NAME) y las tablas
+npm run db:init           # crea la base, aplica sql/schema.sql y siembra los proveedores
 ```
 
-No se siembran datos: sedes, zonas y recursos nacen vacíos.
+`npm run db:init` siembra los dos proveedores (idempotente, no toca su `estado`):
+
+| nombre | url_base | descripcion |
+|---|---|---|
+| `Nager.Date` | `https://date.nager.at/api/v4` | API pública de festivos por país |
+| `Brevo` | `https://api.brevo.com/v3` | API de correo transaccional |
+
+Las tablas de la infraestructura física (`sedes`, `zonas`, `recursos_fisicos`) ya no se
+administran desde aquí. Para eliminarlas de una base existente hace falta la confirmación
+explícita del responsable del proyecto:
+
+```bash
+npm run db:init -- --drop-legacy
+```
 
 ## Ejecución
 
@@ -67,77 +111,59 @@ npm run dev               # recarga automática (node --watch)
 ## Autenticación y autorización
 
 - El JWT es HS256 y se firma con `JWT_SECRET` (el mismo que el backend FastAPI).
-- **Lecturas**: cualquier token válido.
-- **Escrituras** (POST/PUT/DELETE/PATCH y `?incluir_inactivos=true`): el claim `modulos`
-  debe incluir `INFRAESTRUCTURA`; si no, `403`.
 - Sin token o token inválido: `401`.
+- `DELETE /festivos/:id` exige el rol `ADMINISTRADOR` (`claim rol`); si no, `403`.
+- El resto de rutas exige únicamente un token válido.
 
 ## Endpoints
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/health` | Estado del servicio (sin auth). |
-| GET | `/sedes` | Lista de sedes (`?incluir_inactivos=true`). |
-| GET | `/sedes/:id` | Detalle de una sede. |
-| POST | `/sedes` | Crea una sede. |
-| PUT | `/sedes/:id` | Actualiza nombre y tipo de estructura. |
-| DELETE | `/sedes/:id` | Borrado lógico (`estado=0`, 204). |
-| PATCH | `/sedes/:id/activar` | Reactiva la sede. |
-| GET | `/sedes/:id/zonas` | Zonas de la sede. |
-| GET | `/sedes/:id/recursos-fisicos` | Recursos de la sede. |
-| GET | `/sedes/:id/estructura` | Árbol de la sede (404 si no existe). |
-| GET/POST | `/zonas` | Lista (filtro `?sedeId=`) y crea zonas. |
-| GET/PUT/DELETE | `/zonas/:id` | Detalle, actualización y borrado lógico. |
-| PATCH | `/zonas/:id/activar` | Reactiva la zona. |
-| GET | `/zonas/:id/recursos-fisicos` | Recursos de la zona. |
-| GET/POST | `/recursos-fisicos` | Lista (filtros `?sedeId=`, `?zonaId=`) y crea recursos. |
-| GET/PUT/DELETE | `/recursos-fisicos/:id` | Detalle, actualización y borrado lógico. |
-| PATCH | `/recursos-fisicos/:id/activar` | Reactiva el recurso. |
+| GET | `/festivos` | Festivos del año (`?anio=YYYY&pais=CO`). Sincroniza con Nager.Date si el año no está en cache. |
+| GET | `/festivos/validar` | Valida una fecha (`?fecha=YYYY-MM-DD&pais=CO`). |
+| DELETE | `/festivos/:id` | Borrado lógico del festivo (`estado=0`, 204). Solo `ADMINISTRADOR`. |
+| POST | `/correos` | Envía un correo por la API de Brevo (201). Cualquier usuario autenticado. |
+| GET | `/servicios-externos` | Lista los proveedores configurados (solo activos). |
 
-### Reglas de negocio (400 con mensaje claro)
-
-- Sede `BLOQUES`/`PISOS`: el recurso exige `zonaId` de esa sede.
-- Sede `SALONES`: no admite zonas; los recursos no pueden tener `zonaId`.
-- `tipoEstructura` solo cambia si la sede no tiene zonas ni recursos activos.
-- No se desactiva una sede con zonas o recursos activos, ni una zona con recursos activos.
-
-### Respuesta de un recurso
+### Respuestas
 
 ```json
-{
-  "id": 1,
-  "nombre": "Salón 3",
-  "tipo": "SALON",
-  "estado": true,
-  "sedeId": 1,
-  "sedeNombre": "Granadillo",
-  "zonaId": 2,
-  "zonaNombre": "Piso 2",
-  "ubicacion": "Granadillo · Piso 2 · Salón 3"
-}
+// GET /festivos/validar?fecha=2026-05-18
+{ "id": 7, "fecha": "2026-05-18", "pais": "CO", "esFestivo": true, "nombre": "Ascensión del Señor" }
+
+// GET /festivos/validar?fecha=2026-05-14
+{ "fecha": "2026-05-14", "pais": "CO", "esFestivo": false, "nombre": null, "id": null }
+
+// POST /correos
+{ "id": 12, "messageId": "<abc123@ejemplo.com>", "estadoEnvio": "ENVIADO" }
 ```
+
+### Códigos de error relevantes
+
+- `400` — petición inválida (validación con `zod`).
+- `401` — sin token o token inválido.
+- `403` — el rol no permite la acción (borrado de festivo).
+- `404` — festivo inexistente.
+- `502` — el proveedor externo falló (se registró la llamada en la bitácora).
+- `503` — el proveedor no está configurado en `servicios_externos` o falta la API key.
 
 ## Ejemplos con curl
 
 ```bash
-# Token de ejemplo (para pruebas locales). En producción lo emite FastAPI.
-TOKEN=$(node -e "console.log(require('jsonwebtoken').sign({sub:'a@b.c',uid:1,rol:'ADMINISTRADOR',modulos:['INFRAESTRUCTURA']}, process.env.JWT_SECRET, {expiresIn:'30m'}))")
+TOKEN=$(node -e "console.log(require('jsonwebtoken').sign({sub:'a@b.c',uid:1,rol:'ADMINISTRADOR'}, process.env.JWT_SECRET, {expiresIn:'30m'}))")
 
 curl http://localhost:3001/health
 
-curl -X POST http://localhost:3001/sedes \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"nombre":"Granadillo","tipoEstructura":"PISOS"}'
+curl "http://localhost:3001/festivos/validar?fecha=2026-05-18" -H "Authorization: Bearer $TOKEN"
 
-curl -X POST http://localhost:3001/zonas \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"sedeId":1,"nombre":"Piso 2"}'
+curl "http://localhost:3001/festivos?anio=2026" -H "Authorization: Bearer $TOKEN"
 
-curl -X POST http://localhost:3001/recursos-fisicos \
+curl -X POST http://localhost:3001/correos \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"sedeId":1,"zonaId":1,"nombre":"Salón 3"}'
+  -d '{"para":"destinatario@ejemplo.com","asunto":"Confirmación","contenido":"Su solicitud fue registrada."}'
 
-curl http://localhost:3001/sedes/1/estructura -H "Authorization: Bearer $TOKEN"
+curl -X DELETE http://localhost:3001/festivos/7 -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Tests
@@ -146,19 +172,25 @@ curl http://localhost:3001/sedes/1/estructura -H "Authorization: Bearer $TOKEN"
 npm test
 ```
 
-`jest + supertest` levantan la app y usan una base de datos de pruebas. El nombre
-de la base es **`TEST_DB_NAME`** (por defecto `sistema_consultas_infra_test`) y cada
-worker de Jest recibe su propia base (`<test>_w<N>_test`), de modo que la suite
-funciona igual con `--runInBand` (serial) y en paralelo.
+`jest + supertest` levantan la app y usan una base de datos de pruebas. El nombre de la
+base es **`TEST_DB_NAME`** (por defecto `sistema_consultas_infra_test`) y cada worker de
+Jest recibe su propia base (`<test>_w<N>_test`), de modo que la suite funciona igual con
+`--runInBand` (serial) y en paralelo.
 
-La base del worker se crea y se le aplica `sql/schema.sql` de forma automática
-antes de cada archivo de test; cada suite limpia las tablas antes de cada prueba y
-crea sus propios datos. El nombre de la base debe terminar en `_test`; si no, el
-arranque aborta con un error claro (nunca se crea ni se borra una base que no sea
-de pruebas). Si MySQL no está disponible, la suite **falla** (no se omite en silencio).
+La base del worker se crea y se le aplica `sql/schema.sql` de forma automática antes de
+cada archivo de test; cada suite limpia las tablas y vuelve a sembrar los proveedores
+antes de cada prueba. El nombre de la base debe terminar en `_test`; si no, el arranque
+aborta con un error claro (nunca se crea ni se borra una base que no sea de pruebas). Si
+MySQL no está disponible, la suite **falla** (no se omite en silencio).
 
-Cubren: autenticación/autorización, CRUD, borrado lógico y únicos con reactivación,
-tablas vacías y las tres estructuras (con el ejemplo de Granadillo) y sus reglas.
+**Las pruebas nunca salen a la red**: `global.fetch` se simula con `tests/fixtures/nagerCo2026.js`,
+que es una copia de la respuesta real de `https://date.nager.at/api/v4/Holidays/CO/2026`.
+
+Cubren: autenticación/autorización, sincronización con Nager.Date, bitácora de llamadas,
+corrección Ley Emiliani (incluido el cambio de año), festivo desactivado que no se
+resucita ni se resincroniza, error de red y 5xx con reintento (y 404 sin reintento), envío
+de correo con la API de Brevo (éxito, error de red y error del proveedor) y el listado de
+proveedores.
 
 ## Formato de errores
 
@@ -183,4 +215,5 @@ docker run --env-file .env -p 3001:3001 infraestructura-service
 
 Configura `CORS_ORIGINS` con la lista de orígenes permitidos (separados por comas) y
 `JWT_SECRET` con el mismo valor que FastAPI. La base de datos debe crearse una vez con
-`sql/schema.sql` (o `npm run db:init`).
+`sql/schema.sql` (o `npm run db:init`). La **API key de Brevo** solo se lee de
+`EMAIL_PROVIDER_API_KEY`: nunca se guarda en la base de datos ni se expone por la API.

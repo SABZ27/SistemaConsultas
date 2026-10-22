@@ -39,7 +39,12 @@ function asegurarBaseDePrueba() {
       multipleStatements: true,
     });
     await conexion.query('SET FOREIGN_KEY_CHECKS = 0');
-    await conexion.query('DROP TABLE IF EXISTS recursos_fisicos, zonas, sedes');
+    await conexion.query(
+      'DROP TABLE IF EXISTS correos_enviados, festivos, consultas_servicio_externo, servicios_externos'
+    );
+    await conexion.query(
+      'DROP TABLE IF EXISTS recursos_fisicos, zonas, sedes'
+    );
     await conexion.query('SET FOREIGN_KEY_CHECKS = 1');
 
     const sql = fs.readFileSync(path.join(__dirname, '..', 'sql', 'schema.sql'), 'utf8');

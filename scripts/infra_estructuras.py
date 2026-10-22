@@ -1,7 +1,8 @@
-"""Comprobaciones del servicio de infraestructura (Paso D) sobre MySQL local.
+"""Comprobaciones de la infraestructura física (Paso D) sobre el backend FastAPI.
 
-Usa el servicio Express en ejecución (base de verificación *_verif) con un
-token de administrador obtenido de FastAPI. Cubre:
+La infraestructura física (sedes, zonas y recursos físicos) vive en PostgreSQL,
+dentro del backend FastAPI. Este script usa el token de administrador obtenido
+del propio login de FastAPI y cubre:
   * las tres estructuras: PISOS (Granadillo), BLOQUES y SALONES;
   * unicidad con borrado lógico (reinsertar el mismo nombre);
   * que en una sede SALONES (zona NULL) no se duplique "Salón 1";
@@ -20,7 +21,6 @@ import sys
 import httpx
 
 FASTAPI_URL = os.environ.get("FASTAPI_URL", "http://127.0.0.1:8080").rstrip("/")
-INFRA_URL = os.environ.get("INFRA_URL", "http://127.0.0.1:3001").rstrip("/")
 ADMIN_CORREO = os.environ.get("ADMIN_CORREO", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 TIMEOUT = 20.0
@@ -50,16 +50,16 @@ def main() -> int:
         ).json()["token"]
 
         # ---- PISOS: Granadillo ----
-        r = c.post(f"{INFRA_URL}/sedes", json={"nombre": f"Granadillo {marca}", "tipoEstructura": "PISOS"}, headers=H(token))
+        r = c.post(f"{FASTAPI_URL}/sedes", json={"nombre": f"Granadillo {marca}", "tipoEstructura": "PISOS"}, headers=H(token))
         granadillo = r.json()
         check("D crear sede Granadillo (PISOS)", r.status_code == 201, f"{r.status_code} tipo={granadillo.get('tipoEstructura')}")
 
-        r = c.post(f"{INFRA_URL}/zonas", json={"sedeId": granadillo["id"], "nombre": "Piso 2"}, headers=H(token))
+        r = c.post(f"{FASTAPI_URL}/zonas", json={"sedeId": granadillo["id"], "nombre": "Piso 2"}, headers=H(token))
         piso2 = r.json()
         check("D crear piso en Granadillo", r.status_code == 201, f"{r.status_code}")
 
         r = c.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": granadillo["id"], "zonaId": piso2["id"], "nombre": "Salón 3", "tipo": "SALON"},
             headers=H(token),
         )
@@ -68,25 +68,25 @@ def main() -> int:
         check("D recurso Salón 3 con ubicación completa", ok_ubic, f"{r.status_code} ubicacion={salon3.get('ubicacion')!r}")
 
         # ---- BLOQUES ----
-        r = c.post(f"{INFRA_URL}/sedes", json={"nombre": f"Sede Bloques {marca}", "tipoEstructura": "BLOQUES"}, headers=H(token))
+        r = c.post(f"{FASTAPI_URL}/sedes", json={"nombre": f"Sede Bloques {marca}", "tipoEstructura": "BLOQUES"}, headers=H(token))
         bloques = r.json()
         check("D crear sede BLOQUES", r.status_code == 201, f"{r.status_code}")
-        r = c.post(f"{INFRA_URL}/zonas", json={"sedeId": bloques["id"], "nombre": "Bloque A"}, headers=H(token))
+        r = c.post(f"{FASTAPI_URL}/zonas", json={"sedeId": bloques["id"], "nombre": "Bloque A"}, headers=H(token))
         bloque_a = r.json()
         check("D crear bloque en sede BLOQUES", r.status_code == 201, f"{r.status_code}")
         r = c.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": bloques["id"], "zonaId": bloque_a["id"], "nombre": "Salón 1", "tipo": "SALON"},
             headers=H(token),
         )
         check("D recurso en bloque", r.status_code == 201, f"{r.status_code} ubicacion={r.json().get('ubicacion')!r}")
 
         # ---- SALONES ----
-        r = c.post(f"{INFRA_URL}/sedes", json={"nombre": f"Sede Salones {marca}", "tipoEstructura": "SALONES"}, headers=H(token))
+        r = c.post(f"{FASTAPI_URL}/sedes", json={"nombre": f"Sede Salones {marca}", "tipoEstructura": "SALONES"}, headers=H(token))
         salones = r.json()
         check("D crear sede SALONES", r.status_code == 201, f"{r.status_code}")
         r = c.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": salones["id"], "nombre": "Salón 1", "tipo": "SALON"},
             headers=H(token),
         )
@@ -95,27 +95,27 @@ def main() -> int:
 
         # Duplicado activo "Salón 1" (zona NULL) -> 400
         r = c.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": salones["id"], "nombre": "Salón 1", "tipo": "SALON"},
             headers=H(token),
         )
         check("D duplicar 'Salón 1' activo en SALONES -> 400", r.status_code == 400, f"{r.status_code}")
 
         # Borrado lógico y reinserción del mismo nombre
-        r = c.delete(f"{INFRA_URL}/recursos-fisicos/{salon1['id']}", headers=H(token))
+        r = c.delete(f"{FASTAPI_URL}/recursos-fisicos/{salon1['id']}", headers=H(token))
         check("D borrado lógico de 'Salón 1' -> 204", r.status_code == 204, f"{r.status_code}")
         r = c.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": salones["id"], "nombre": "Salón 1", "tipo": "SALON"},
             headers=H(token),
         )
         check("D reinsertar 'Salón 1' tras borrado lógico -> 201", r.status_code == 201, f"{r.status_code}")
         if r.status_code == 201:
-            c.delete(f"{INFRA_URL}/recursos-fisicos/{r.json()['id']}", headers=H(token))
+            c.delete(f"{FASTAPI_URL}/recursos-fisicos/{r.json()['id']}", headers=H(token))
 
         # FK compuesta: usar la zona de Granadillo en la sede BLOQUES -> 400
         r = c.post(
-            f"{INFRA_URL}/recursos-fisicos",
+            f"{FASTAPI_URL}/recursos-fisicos",
             json={"sedeId": bloques["id"], "zonaId": piso2["id"], "nombre": f"Salón cruzado {marca}", "tipo": "SALON"},
             headers=H(token),
         )

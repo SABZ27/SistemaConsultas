@@ -15,6 +15,7 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./sql/seed-servicios.sql:/docker-entrypoint-initdb.d/02-seed-servicios.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
       interval: 5s
