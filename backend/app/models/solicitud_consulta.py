@@ -1,4 +1,5 @@
 from datetime import date, time
+from typing import Optional
 
 from sqlalchemy import Date, ForeignKey, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,12 +26,13 @@ class SolicitudConsulta(AuditoriaMixin, Base):
     estudiante_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     docente_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     modulo_id: Mapped[int] = mapped_column(ForeignKey("modulos.id"), nullable=False)
-    # Recurso físico asignado: decisión deliberada de NO mantener una FK hacia el
-    # microservicio de infraestructura (Express + MySQL). Se guarda el id sin
-    # integridad referencial y una copia de la ubicación completa al asignar,
-    # para no llamar al servicio al listar y conservar el historial ("Salón 3"
-    # solo es ambiguo entre sedes). Ver Fase 4.
-    recurso_fisico_id: Mapped[int | None] = mapped_column(nullable=True)
+    # Recurso físico asignado: la infraestructura física vive ahora en PostgreSQL
+    # (tabla recursos_fisicos), por lo que se mantiene integridad referencial real
+    # y una copia de la ubicación completa ("Sede · Zona · Recurso") al asignar,
+    # para conservar el historial aunque el recurso se desactive después.
+    recurso_fisico_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recursos_fisicos.id"), nullable=True
+    )
     recurso_fisico_nombre: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     estudiante: Mapped["Usuario"] = relationship(foreign_keys=[estudiante_id], backref="solicitudes_estudiante")
@@ -38,3 +40,4 @@ class SolicitudConsulta(AuditoriaMixin, Base):
     modulo: Mapped["Modulo"] = relationship(back_populates="solicitudes")
     comentarios: Mapped[list["Comentario"]] = relationship(back_populates="solicitudConsulta")
     eventos: Mapped[list["EventoSolicitud"]] = relationship(back_populates="solicitud")
+    recurso_fisico: Mapped[Optional["RecursoFisico"]] = relationship()

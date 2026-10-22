@@ -16,6 +16,9 @@ from app.models.tipo_documento import TipoDocumento
 from app.models.calificacion_consulta import CalificacionConsulta
 from app.models.periodo_academico import PeriodoAcademico
 from app.models.disponibilidad_docente import DisponibilidadDocente
+from app.models.sede import Sede
+from app.models.zona import Zona
+from app.models.recurso_fisico import RecursoFisico
 
 __all__ = [
     "Base",
@@ -35,4 +38,7 @@ __all__ = [
     "CalificacionConsulta",
     "PeriodoAcademico",
     "DisponibilidadDocente",
+    "Sede",
+    "Zona",
+    "RecursoFisico",
 ]

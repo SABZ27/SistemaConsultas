@@ -26,7 +26,7 @@ def verificar_postgres():
         print(f"ERROR: {e}")
         sys.exit(1)
 
-    expected_tables = 16  # según especificación
+    expected_tables = 19  # según especificación
     with engine.connect() as conn:
         # contar tablas de usuario (no del sistema)
         # PostgreSQL: information_schema.tables

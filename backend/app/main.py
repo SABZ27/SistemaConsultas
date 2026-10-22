@@ -10,17 +10,20 @@ from app.api.routes import (
     calificaciones,
     comentarios,
     disponibilidad_docente,
-        docentes_modulos,
-        modulos,
-        modulos_sistema,
-        notificaciones,
-        periodos_academicos,
-        programas,
-        roles,
-        solicitudes_consultas,
-        tipos_documento,
-        usuarios,
-    )
+    docentes_modulos,
+    modulos,
+    modulos_sistema,
+    notificaciones,
+    periodos_academicos,
+    programas,
+    recursos_fisicos,
+    roles,
+    sedes,
+    solicitudes_consultas,
+    tipos_documento,
+    usuarios,
+    zonas,
+)
 from app.core.security import decode_token
 from app.db.session import init_db
 from app.exceptions.errors import (
@@ -94,6 +97,9 @@ def crear_app() -> FastAPI:
     app.include_router(periodos_academicos.router)
     app.include_router(disponibilidad_docente.router)
     app.include_router(calificaciones.router)
+    app.include_router(sedes.router)
+    app.include_router(zonas.router)
+    app.include_router(recursos_fisicos.router)
 
     return app
 

@@ -71,7 +71,7 @@ def requiere_modulo(nombre_modulo: str):
         usuario: Usuario = Depends(get_current_user),
         db: Session = Depends(get_db),
     ) -> Usuario:
-        if not ModuloXRolRepository(db).existe_permiso_activo(usuario.rol_id, nombre_modulo):
+        if not tiene_permiso_modulo(db, usuario, nombre_modulo):
             raise HTTPException(
                 status_code=403,
                 detail="No tiene permisos para realizar esta acción.",
@@ -79,3 +79,7 @@ def requiere_modulo(nombre_modulo: str):
         return usuario
 
     return _dependencia
+
+
+def tiene_permiso_modulo(db: Session, usuario: Usuario, nombre_modulo: str) -> bool:
+    return ModuloXRolRepository(db).existe_permiso_activo(usuario.rol_id, nombre_modulo)

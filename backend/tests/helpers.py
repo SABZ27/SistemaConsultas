@@ -70,31 +70,34 @@ def crear_modulo(client, token, nombre=None):
     return resp.json()
 
 
-def crear_sede(client, token):
-    n = _next()
-    resp = client.post("/sedes", json={"nombre": f"Sede {n}"}, headers=auth(token))
-    assert resp.status_code == 201, resp.text
-    return resp.json()
-
-
-def crear_bloque(client, token, sede_id):
+def crear_sede(client, token, nombre=None, tipo_estructura="BLOQUES"):
     n = _next()
     resp = client.post(
-        "/bloques",
-        json={"nombre": f"Bloque {n}", "sedeId": sede_id},
+        "/sedes",
+        json={"nombre": nombre or f"Sede {n}", "tipoEstructura": tipo_estructura},
         headers=auth(token),
     )
     assert resp.status_code == 201, resp.text
     return resp.json()
 
 
-def crear_recurso(client, token, bloque_id):
+def crear_zona(client, token, sede_id, nombre=None):
     n = _next()
     resp = client.post(
-        "/recursos-fisicos",
-        json={"nombre": f"Recurso {n}", "tipo": "SALON", "bloqueId": bloque_id},
+        "/zonas",
+        json={"sedeId": sede_id, "nombre": nombre or f"Zona {n}"},
         headers=auth(token),
     )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def crear_recurso(client, token, sede_id, zona_id=None, nombre=None, tipo="SALON"):
+    n = _next()
+    payload = {"sedeId": sede_id, "nombre": nombre or f"Recurso {n}", "tipo": tipo}
+    if zona_id is not None:
+        payload["zonaId"] = zona_id
+    resp = client.post("/recursos-fisicos", json=payload, headers=auth(token))
     assert resp.status_code == 201, resp.text
     return resp.json()
 
