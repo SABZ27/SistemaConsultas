@@ -16,6 +16,7 @@ from app.core.config import (
 from app.core.rate_limit import (
     LIMITE_LOGIN_IP,
     LIMITE_LOGIN_PAR,
+    LOGIN_IP_MAX_FALLOS,
     MAX_CLAVES_LIMITADOR,
     MENSAJE_DEMASIADAS_SOLICITUDES,
     MENSAJE_DEMASIADOS_INTENTOS,
@@ -89,6 +90,38 @@ def test_obtener_ip_cae_a_client_host_si_faltan_entradas_o_es_invalida(
         **base,
     )
     assert obtener_ip(invalida) == "192.0.2.10"
+
+
+def test_cadena_parcialmente_malformada_cae_a_client_host(monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
+    base = {"client": SimpleNamespace(host="192.0.2.10")}
+
+    # La inválida está en la última entrada (el edge), NO en la candidata:
+    # antes se devolvía 203.0.113.10; ahora la cadena completa se invalida.
+    edge_invalido = SimpleNamespace(
+        headers={"x-forwarded-for": "203.0.113.10, no-es-ip"}, **base
+    )
+    assert obtener_ip(edge_invalido) == "192.0.2.10"
+
+    entrada_vacia = SimpleNamespace(
+        headers={"x-forwarded-for": f"203.0.113.10, , {IP_EDGE}"}, **base
+    )
+    assert obtener_ip(entrada_vacia) == "192.0.2.10"
+
+    coma_final = SimpleNamespace(
+        headers={"x-forwarded-for": f"203.0.113.10, {IP_EDGE},"}, **base
+    )
+    assert obtener_ip(coma_final) == "192.0.2.10"
+
+
+def test_menos_entradas_que_hops_mas_uno_cae_a_client_host(monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 2)
+    peticion = SimpleNamespace(
+        headers={"x-forwarded-for": f"203.0.113.10, {IP_EDGE}"},
+        client=SimpleNamespace(host="192.0.2.10"),
+    )
+    # Con hops=2 hacen falta 3 entradas; solo hay 2.
+    assert obtener_ip(peticion) == "192.0.2.10"
 
 
 def test_diagnostico_ip_solo_registra_conteos(monkeypatch, caplog):
@@ -170,13 +203,31 @@ def test_login_correcto_limpia_solo_la_pareja_correo_ip(client, monkeypatch):
     assert LIMITE_LOGIN_PAR.claves_actuales == 0
     assert LIMITE_LOGIN_IP.claves_actuales == 1
 
-    # El contador de la IP sigue vivo: 15 fallos de otros correos + 1 más
-    # alcanzan el máximo de 20 aunque la pareja se haya limpiado.
-    for i in range(15):
+    # El contador de la IP sigue vivo tras el login correcto (solo se limpia
+    # la pareja): 4 fallos iniciales + 95 fallos de otros correos + 1 fallo
+    # final = 100 = LOGIN_IP_MAX_FALLOS. Ese último fallo dispara el bloqueo
+    # de la IP, por eso el login correcto posterior recibe 429.
+    for i in range(95):
         assert _login_falla(client, f"otro{i}@test.com", xff).status_code == 401
 
     assert _login_falla(client, "pareja@test.com", xff).status_code == 401
     assert _login_ok(client, "pareja@test.com", xff).status_code == 429
+
+
+def test_limite_por_ip_de_login_es_100(client, monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
+    assert LOGIN_IP_MAX_FALLOS == 100
+    xff = _xff("198.51.100.1")
+
+    # Correos distintos: no se disparan los límites por pareja (5) ni por
+    # correo (15), solo se acumula la IP.
+    for i in range(100):
+        assert (
+            _login_falla(client, f"ip100-{i}@test.com", xff).status_code == 401
+        )
+
+    # El fallo 100 agotó la IP; cualquier intento posterior queda bloqueado.
+    assert _login_falla(client, "ip100-extra@test.com", xff).status_code == 429
 
 
 def test_limite_por_correo_frena_ataques_distribuidos(client, monkeypatch):

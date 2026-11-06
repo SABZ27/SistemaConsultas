@@ -35,7 +35,9 @@ LOGIN_CORREO_MAX_FALLOS = 15
 LOGIN_CORREO_VENTANA_SEGUNDOS = 15 * 60
 
 # Login: límite solo por IP. No se limpia con un login correcto.
-LOGIN_IP_MAX_FALLOS = 20
+# Más alto que el de pareja (5) y el de correo (15) para mitigar el riesgo de
+# agrupar muchos clientes tras el edge cuando TRUSTED_PROXY_HOPS no es exacto.
+LOGIN_IP_MAX_FALLOS = 100
 LOGIN_IP_VENTANA_SEGUNDOS = 15 * 60
 LOGIN_IP_BLOQUEO_SEGUNDOS = 15 * 60
 
@@ -296,12 +298,13 @@ def obtener_ip(request: Request) -> str:
     TRUSTED_PROXY_HOPS=1 la entrada -(1+1) es el cliente y la última (el edge)
     se descarta. Las entradas a la izquierda del cliente son falsificables y
     se ignoran. Si falta el encabezado, tiene menos entradas de las esperadas
-    o la candidata no es una IP válida, se usa la conexión directa.
+    o CUALQUIERA de sus entradas está vacía, malformada o no es una IP válida,
+    se usa la conexión directa.
     """
     reenviado = request.headers.get("x-forwarded-for")
     partes = (
-        [parte.strip() for parte in reenviado.split(",") if parte.strip()]
-        if reenviado
+        [parte.strip() for parte in reenviado.split(",")]
+        if reenviado is not None
         else []
     )
 
@@ -314,9 +317,14 @@ def obtener_ip(request: Request) -> str:
         )
 
     hops = settings.trusted_proxy_hops
-    if len(partes) >= hops + 1:
-        candidata = _normalizar_ip(partes[-(hops + 1)])
-        if candidata is not None:
-            return candidata
+    if len(partes) < hops + 1:
+        return _host_directo(request)
 
-    return _host_directo(request)
+    ips = []
+    for parte in partes:
+        ip = _normalizar_ip(parte)
+        if ip is None:
+            return _host_directo(request)
+        ips.append(ip)
+
+    return ips[-(hops + 1)]
