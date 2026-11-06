@@ -79,6 +79,8 @@ class SolicitudConsultaResponse(BaseModel):
     nombreRecursoFisico: str | None = "Sin asignar"
     # Aditivos del Bloque C: no sustituyen ningún campo existente.
     calificacion: CalificacionResumen | None = None
+    # Último comentario activo del docente asignado (null si no hay ninguno).
+    retroalimentacionDocente: str | None = None
     fechaActualizacion: datetime | None = None
 
     @field_serializer("horaConsulta")

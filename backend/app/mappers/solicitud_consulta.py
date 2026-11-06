@@ -2,38 +2,37 @@ from app.models.solicitud_consulta import SolicitudConsulta
 from app.models.usuario import Usuario
 from app.models.enums import Rol
 from app.mappers.usuario import nombre_completo
+from app.mappers.contexto_solicitudes import ContextoSolicitudes
 from app.schemas.solicitud import CalificacionResumen, SolicitudConsultaResponse
 
 
-def _calificacion_resumen(s: SolicitudConsulta) -> CalificacionResumen | None:
-    """Nota activa de la consulta, si existe.
-
-    El backref ``calificacion`` de CalificacionConsulta.solicitud puede
-    materializarse como lista o como objeto según la configuración ORM; se
-    normaliza y se respeta la baja lógica (``estado``).
-    """
-    relacion = getattr(s, "calificacion", None)
-    if relacion is None:
+def _calificacion_resumen(
+    s: SolicitudConsulta, contexto: ContextoSolicitudes
+) -> CalificacionResumen | None:
+    """Nota activa desde el contexto precargado (sin consulta por fila)."""
+    calificacion = contexto.calificaciones.get(s.id)
+    if calificacion is None:
         return None
-    candidatos = relacion if isinstance(relacion, (list, tuple)) else [relacion]
-    for c in candidatos:
-        if getattr(c, "estado", False):
-            return CalificacionResumen(
-                puntaje=c.puntaje,
-                comentario=c.comentario,
-                fecha=c.creado,
-            )
-    return None
+    return CalificacionResumen(
+        puntaje=calificacion.puntaje,
+        comentario=calificacion.comentario,
+        fecha=calificacion.creado,
+    )
 
 
 def solicitud_consulta_response(
-    s: SolicitudConsulta, usuario_actual: Usuario | None = None
+    s: SolicitudConsulta,
+    usuario_actual: Usuario | None = None,
+    contexto: ContextoSolicitudes | None = None,
 ) -> SolicitudConsultaResponse:
     """Enmascara la identificación de la otra parte según quién consulta.
 
     Cada participante ve solo su propia identificación; el administrador ve
     ambas; cualquier otro usuario autenticado no ve ninguna. Los campos siguen
     en el contrato, con valor ``None`` cuando no corresponden.
+
+    ``contexto`` debe venir de ``construir_contexto`` (carga por lote), para
+    que los listados no hagan una consulta por fila.
     """
     estudiante = s.estudiante
     docente = s.docente
@@ -46,6 +45,7 @@ def solicitud_consulta_response(
         estudiante is not None and id_actual == estudiante.id
     )
     ve_docente = es_admin or (docente is not None and id_actual == docente.id)
+    ctx = contexto or ContextoSolicitudes()
 
     return SolicitudConsultaResponse(
         id=s.id,
@@ -70,6 +70,7 @@ def solicitud_consulta_response(
         nombrePrograma=programa.nombre if programa else "Sin programa",
         recursoFisicoId=s.recurso_fisico_id,
         nombreRecursoFisico=s.recurso_fisico_nombre or "Sin asignar",
-        calificacion=_calificacion_resumen(s),
+        calificacion=_calificacion_resumen(s, ctx),
+        retroalimentacionDocente=ctx.retroalimentaciones.get(s.id),
         fechaActualizacion=s.actualizado,
     )

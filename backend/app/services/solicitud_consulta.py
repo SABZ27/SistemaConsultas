@@ -10,6 +10,7 @@ from app.exceptions.errors import (
     ResourceNotFoundException,
     ServiceUnavailableException,
 )
+from app.mappers.contexto_solicitudes import construir_contexto
 from app.mappers.solicitud_consulta import solicitud_consulta_response
 from app.models.enums import EstadoSolicitud, Rol
 from app.models.solicitud_consulta import SolicitudConsulta
@@ -64,6 +65,19 @@ class SolicitudConsultaService:
         """Correos que genera la operación (los envía la capa de API)."""
         return self.notificacion_service.correos_pendientes
 
+    def _responder(self, solicitud, usuario_actual):
+        """Respuesta de una sola solicitud con su contexto precargado."""
+        contexto = construir_contexto(self.db, [solicitud])
+        return solicitud_consulta_response(solicitud, usuario_actual, contexto)
+
+    def _responder_lista(self, solicitudes, usuario_actual):
+        """Respuestas de un listado con UNA carga por lote para todas."""
+        contexto = construir_contexto(self.db, solicitudes)
+        return [
+            solicitud_consulta_response(s, usuario_actual, contexto)
+            for s in solicitudes
+        ]
+
     def registrar(
         self,
         req: RegistroSolicitudConsultaRequest,
@@ -102,7 +116,7 @@ class SolicitudConsultaService:
         self.notificacion_service.notificar_nueva_solicitud(solicitud_guardada, estudiante)
         self.evento_service.nueva_solicitud(solicitud_guardada, estudiante)
 
-        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
+        return self._responder(solicitud_guardada, usuario_actual)
 
     def obtener_por_id(self, id_solicitud: int, usuario_actual: Usuario):
         solicitud = self._obtener_solicitud(id_solicitud)
@@ -113,7 +127,7 @@ class SolicitudConsultaService:
                 status_code=403,
                 detail="No tiene permisos para consultar esta solicitud.",
             )
-        return solicitud_consulta_response(solicitud, usuario_actual)
+        return self._responder(solicitud, usuario_actual)
 
     def listar_todas(self, usuario_actual: Usuario):
         if usuario_actual.rol == Rol.ESTUDIANTE:
@@ -127,7 +141,7 @@ class SolicitudConsultaService:
                     detail="No tiene permisos para consultar todas las solicitudes.",
                 )
             filas = self.repo.find_all()
-        return [solicitud_consulta_response(s, usuario_actual) for s in filas]
+        return self._responder_lista(filas, usuario_actual)
 
     def actualizar(
         self,
@@ -175,7 +189,7 @@ class SolicitudConsultaService:
             )
             self.evento_service.cambio_agenda(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
+        return self._responder(solicitud_guardada, usuario_actual)
 
     def asignar_recurso_fisico(
         self,
@@ -211,7 +225,7 @@ class SolicitudConsultaService:
         )
         self.evento_service.asignacion_recurso(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
+        return self._responder(solicitud_guardada, usuario_actual)
 
     def cambiar_estado(
         self,
@@ -233,7 +247,7 @@ class SolicitudConsultaService:
         )
         self.evento_service.cambio_estado(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
+        return self._responder(solicitud_guardada, usuario_actual)
 
     def reasignar_docente(
         self,
@@ -260,7 +274,7 @@ class SolicitudConsultaService:
         )
         self.evento_service.reasignacion(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
+        return self._responder(solicitud_guardada, usuario_actual)
 
     def eliminar(self, id_solicitud: int, usuario_actual: Usuario) -> None:
         solicitud = self._obtener_solicitud(id_solicitud)
