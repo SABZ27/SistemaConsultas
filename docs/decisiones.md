@@ -91,3 +91,35 @@ Esta resolución por saltos asume que el servicio solo recibe tráfico a través
 de los proxies de Render; **no valida la confianza de las entradas**. Si esa
 condición operativa cambiara (acceso directo o un proxy que no limpie el
 `X-Forwarded-For` entrante), la decisión debe revisarse.
+
+## Autorización por rol: diseño intencional (Bloque D)
+
+La matriz de autorización (`backend/tests/test_autorizacion_roles.py`) se
+contrasta con las rutas reales de la aplicación y falla si aparece un endpoint
+nuevo no declarado. Se documentan como **decisiones intencionales**, no como
+defectos:
+
+- **Registro público de `ESTUDIANTE` y `DOCENTE`**: `POST /auth/register` crea
+  cualquiera de esos dos roles sin autenticación. Solo `ADMINISTRADOR` se
+  rechaza con 403 (`AuthService.registro`). El campo `estado` y cualquier campo
+  extra se ignoran (`RegistroUsuarioRequest` usa `extra="ignore"`) y el usuario
+  queda activo; hay tests que lo comprueban.
+- **Lectura de catálogos por cualquier usuario autenticado**: los `GET` de
+  módulos, programas, periodos, tipos de documento, sedes, zonas, recursos
+  físicos, disponibilidad y resumen de docentes usan solo `get_current_user`.
+  Las operaciones de escritura y activación sí exigen el módulo correspondiente
+  (`requiere_modulo`), según `MATRIZ_MODULOS_X_ROL` de `app/db/seeds.py`.
+- **Express**: solo `GET /health` es público. Todas las demás rutas exigen
+  token; `POST /correos` exige además el rol `SERVICIO` y
+  `DELETE /festivos/:id` el rol `ADMINISTRADOR`.
+- **Recursos ajenos**: se comprueban con datos reales (consultas, comentarios y
+  notificaciones de otro usuario). El código de rechazo depende del servicio:
+  403 para consultas ajenas y borrado de comentarios ajenos, 400 para editar un
+  comentario ajeno o marcar como leída una notificación ajena. Es el
+  comportamiento actual y se conserva.
+
+El inventario de cobertura y la revisión de datos personales están en
+`docs/cobertura-seguridad.md`; la auditoría de dependencias, en
+`docs/auditoria-dependencias.md`. `get_current_user_optional` se documenta
+allí como código muerto y **no se elimina**. Ninguna propuesta de reducción de
+datos personales se ha aplicado.
