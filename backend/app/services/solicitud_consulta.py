@@ -8,6 +8,7 @@ from app.clients.servicios_externos import ServiciosExternosClient
 from app.exceptions.errors import (
     BadRequestException,
     ResourceNotFoundException,
+    ServiceUnavailableException,
 )
 from app.mappers.solicitud_consulta import solicitud_consulta_response
 from app.models.enums import EstadoSolicitud, Rol
@@ -300,26 +301,26 @@ class SolicitudConsultaService:
     def _validar_festivo(self, fecha: date, token: str) -> None:
         """Valida la fecha contra el servicio de festivos del microservicio.
 
-        Si la fecha es festiva se rechaza la operación con 400. Si el servicio
-        no está disponible la validación se omite (fail-open): la solicitud se
-        registra igual y se deja un aviso en el log, sin nombres, correos ni
-        identificadores.
+        Si la fecha es festiva se rechaza con 400. Si el servicio no responde
+        (red, timeout, 5xx o respuesta inválida) se rechaza con 503
+        (fail-closed): no se crea ni se reprograma sin validar la fecha. El
+        aviso del log lleva la fecha, el tipo de error y el código HTTP si lo
+        hay, sin nombres, correos ni identificadores.
         """
         try:
             respuesta = self.cliente_externos.validar_festivo(fecha, token)
-        except Exception as error:  # fail-open: el servicio no debe tumbar la API
+        except Exception as error:  # fail-closed: no se opera sin validar
             codigo_http = getattr(error, "codigo_http", None)
             logger.warning(
                 "No se pudo validar el carácter festivo de la fecha %s: %s%s",
                 fecha.isoformat(),
                 getattr(error, "causa", None) or type(error).__name__,
-                (
-                    f" (HTTP {codigo_http})"
-                    if codigo_http in (401, 403)
-                    else ""
-                ),
+                f" (HTTP {codigo_http})" if codigo_http is not None else "",
             )
-            return
+            raise ServiceUnavailableException(
+                "No se pudo validar la fecha en este momento. "
+                "Intenta de nuevo en un minuto"
+            ) from error
 
         if not respuesta.get("esFestivo"):
             return

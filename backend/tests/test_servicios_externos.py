@@ -32,6 +32,25 @@ FESTIVO = {
     "nombre": "Día de la Independencia",
 }
 
+MENSAJE_FESTIVO_NO_VALIDADO = (
+    "No se pudo validar la fecha en este momento. Intenta de nuevo en un minuto"
+)
+
+
+def _assert_503(response, log, *correos):
+    """Comprueba el cuerpo completo del 503 y que el log no lleva PII."""
+    assert response.status_code == 503, response.text
+    cuerpo = response.json()
+    assert set(cuerpo) == {"timestamp", "status", "error", "message", "errors"}
+    assert cuerpo["status"] == 503
+    assert cuerpo["error"] == "Service Unavailable"
+    assert cuerpo["message"] == MENSAJE_FESTIVO_NO_VALIDADO
+    assert cuerpo["errors"] is None
+    assert isinstance(cuerpo["timestamp"], str) and cuerpo["timestamp"]
+    assert "No se pudo validar el carácter festivo" in log
+    for correo in correos:
+        assert correo not in log
+
 
 class _Respuesta:
     def __init__(self, status_code, payload=None):
@@ -112,12 +131,12 @@ def test_validar_festivo_ok_reenvia_el_bearer(cliente_real, monkeypatch):
     assert headers == {"Authorization": "Bearer token-abc"}
 
 
-def test_validar_festivo_usa_timeout_corto_de_15_segundos(cliente_real, monkeypatch):
+def test_validar_festivo_usa_timeout_de_45_segundos(cliente_real, monkeypatch):
     creados = _parchear(monkeypatch, [_Respuesta(200, FESTIVO)])
 
     ServiciosExternosClient().validar_festivo(date(2026, 7, 20), "token")
 
-    assert creados[0].timeouts == [15.0]
+    assert creados[0].timeouts == [45.0]
 
 
 def test_validar_festivo_reintenta_una_vez_si_responde_5xx(cliente_real, monkeypatch):
@@ -137,6 +156,38 @@ def test_validar_festivo_reintenta_una_vez_si_falla_la_red(cliente_real, monkeyp
 
     assert len(creados) == 2
     assert error.value.causa == "ConnectError"
+
+
+def test_validar_festivo_reintenta_una_vez_si_hay_timeout(cliente_real, monkeypatch):
+    creados = _parchear(monkeypatch, [httpx.ReadTimeout("timeout")] * 2)
+
+    with pytest.raises(ServiceUnavailableException) as error:
+        ServiciosExternosClient().validar_festivo(date(2026, 7, 20), "token")
+
+    assert len(creados) == 2
+    assert creados[0].timeouts == [45.0]
+    assert error.value.causa == "ReadTimeout"
+
+
+def test_validar_festivo_no_reintenta_errores_4xx(cliente_real, monkeypatch):
+    creados = _parchear(
+        monkeypatch, [_Respuesta(401, {"message": "Token inválido o expirado."})]
+    )
+
+    with pytest.raises(ServiceUnavailableException) as error:
+        ServiciosExternosClient().validar_festivo(date(2026, 7, 20), "token")
+
+    assert len(creados) == 1
+    assert error.value.codigo_http == 401
+
+
+def test_validar_festivo_rechaza_una_respuesta_sin_esfestivo(cliente_real, monkeypatch):
+    _parchear(monkeypatch, [_Respuesta(200, {"fecha": "2026-07-20"})])
+
+    with pytest.raises(ServiceUnavailableException) as error:
+        ServiciosExternosClient().validar_festivo(date(2026, 7, 20), "token")
+
+    assert error.value.causa == "RespuestaInválida"
 
 
 def test_validar_festivo_conserva_el_codigo_http_401(cliente_real, monkeypatch):
@@ -228,6 +279,20 @@ def _express_caido(monkeypatch):
     monkeypatch.setattr(ServiciosExternosClient, "validar_festivo", _validar)
 
 
+def _express_timeout(monkeypatch):
+    def _validar(self, fecha, token):
+        raise ServiceUnavailableException(causa="ReadTimeout")
+
+    monkeypatch.setattr(ServiciosExternosClient, "validar_festivo", _validar)
+
+
+def _express_401(monkeypatch):
+    def _validar(self, fecha, token):
+        raise ServiceUnavailableException(codigo_http=401, causa="RespuestaHTTP")
+
+    monkeypatch.setattr(ServiciosExternosClient, "validar_festivo", _validar)
+
+
 def test_crear_solicitud_en_fecha_festiva_devuelve_400(client, monkeypatch):
     admin, docente, estudiante, modulo = escenario_completo(client)
     _festivo(monkeypatch)
@@ -262,7 +327,7 @@ def test_crear_solicitud_en_fecha_no_festiva_crea_la_solicitud(client):
     assert resp.json()["fechaConsulta"] == fecha.isoformat()
 
 
-def test_crear_solicitud_con_el_microservicio_caido_igual_crea(client, monkeypatch, caplog):
+def test_crear_solicitud_con_el_microservicio_caido_devuelve_503(client, monkeypatch, caplog):
     admin, docente, estudiante, modulo = escenario_completo(client)
     _express_caido(monkeypatch)
     fecha = date.today() + timedelta(days=1)
@@ -275,12 +340,89 @@ def test_crear_solicitud_con_el_microservicio_caido_igual_crea(client, monkeypat
             headers=auth(estudiante["token"]),
         )
 
-    assert resp.status_code == 201, resp.text
-    assert "No se pudo validar el carácter festivo" in caplog.text
+    _assert_503(resp, caplog.text, estudiante["correo"], docente["correo"])
     assert fecha.isoformat() in caplog.text
-    # El aviso no lleva datos personales.
-    assert estudiante["correo"] not in caplog.text
-    assert docente["correo"] not in caplog.text
+    # No se creó la solicitud.
+    lista = client.get("/solicitudes-consultas", headers=auth(estudiante["token"]))
+    assert lista.status_code == 200
+    assert lista.json() == []
+
+
+def test_crear_solicitud_con_timeout_devuelve_503(client, monkeypatch, caplog):
+    admin, docente, estudiante, modulo = escenario_completo(client)
+    _express_timeout(monkeypatch)
+    fecha = date.today() + timedelta(days=1)
+    asegurar_periodo_cubre(client, admin["token"], fecha)
+
+    with caplog.at_level("WARNING"):
+        resp = client.post(
+            "/solicitudes-consultas",
+            json=_payload(fecha, docente["id_usuario"], modulo["id"]),
+            headers=auth(estudiante["token"]),
+        )
+
+    _assert_503(resp, caplog.text, estudiante["correo"], docente["correo"])
+    assert "ReadTimeout" in caplog.text
+    lista = client.get("/solicitudes-consultas", headers=auth(estudiante["token"]))
+    assert lista.json() == []
+
+
+def test_crear_solicitud_con_401_de_express_devuelve_503(client, monkeypatch, caplog):
+    admin, docente, estudiante, modulo = escenario_completo(client)
+    _express_401(monkeypatch)
+    fecha = date.today() + timedelta(days=1)
+    asegurar_periodo_cubre(client, admin["token"], fecha)
+
+    with caplog.at_level("WARNING"):
+        resp = client.post(
+            "/solicitudes-consultas",
+            json=_payload(fecha, docente["id_usuario"], modulo["id"]),
+            headers=auth(estudiante["token"]),
+        )
+
+    _assert_503(resp, caplog.text, estudiante["correo"], docente["correo"])
+    assert "(HTTP 401)" in caplog.text
+    lista = client.get("/solicitudes-consultas", headers=auth(estudiante["token"]))
+    assert lista.json() == []
+
+
+def test_reprogramar_con_el_microservicio_caido_devuelve_503(client, monkeypatch, caplog):
+    admin, docente, estudiante, modulo = escenario_completo(client)
+    fecha = date.today() + timedelta(days=1)
+    asegurar_periodo_cubre(client, admin["token"], fecha)
+    creada = client.post(
+        "/solicitudes-consultas",
+        json=_payload(fecha, docente["id_usuario"], modulo["id"]),
+        headers=auth(estudiante["token"]),
+    )
+    assert creada.status_code == 201, creada.text
+
+    _express_caido(monkeypatch)
+    nueva_fecha = fecha + timedelta(days=1)
+    asegurar_periodo_cubre(client, admin["token"], nueva_fecha)
+    with caplog.at_level("WARNING"):
+        resp = client.put(
+            f"/solicitudes-consultas/{creada.json()['id']}",
+            json={
+                "prioridad": "MEDIA",
+                "asunto": "Asunto",
+                "descripcion": "Descripción",
+                "fechaConsulta": nueva_fecha.isoformat(),
+                "horaConsulta": "06:30",
+                "moduloId": modulo["id"],
+                "motivo": "Cambio de agenda",
+            },
+            headers=auth(estudiante["token"]),
+        )
+
+    _assert_503(resp, caplog.text, estudiante["correo"], docente["correo"])
+    # La fecha original no cambió.
+    detalle = client.get(
+        f"/solicitudes-consultas/{creada.json()['id']}",
+        headers=auth(estudiante["token"]),
+    )
+    assert detalle.status_code == 200
+    assert detalle.json()["fechaConsulta"] == fecha.isoformat()
 
 
 def test_reprogramar_a_una_fecha_festiva_devuelve_400(client, monkeypatch):

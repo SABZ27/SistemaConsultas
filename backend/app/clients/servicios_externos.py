@@ -9,8 +9,9 @@ from app.exceptions.errors import ServiceUnavailableException
 logger = logging.getLogger("sistema_consultas")
 
 # La validación de festivos va en el camino crítico de la creación de la
-# solicitud: usa un timeout corto (15 s) con 1 reintento.
-TIMEOUT_FESTIVOS = 15.0
+# solicitud: timeout de 45 s con 1 reintento solo para errores de conexión
+# o respuestas 5xx.
+TIMEOUT_FESTIVOS = 45.0
 INTENTOS_GET = 2
 
 # El envío de correo corre en segundo plano: usa el timeout general
@@ -53,7 +54,13 @@ class ServiciosExternosClient:
                 codigo_http=respuesta.status_code,
                 causa="RespuestaHTTP",
             )
-        return respuesta.json()
+        try:
+            datos = respuesta.json()
+        except ValueError as error:
+            raise ServiceUnavailableException(causa="RespuestaInválida") from error
+        if not isinstance(datos, dict) or "esFestivo" not in datos:
+            raise ServiceUnavailableException(causa="RespuestaInválida")
+        return datos
 
     # --- Correo (POST, sin reintento) --------------------------------------
     def enviar_correo(
@@ -89,12 +96,16 @@ class ServiciosExternosClient:
                     )
                     continue
                 return respuesta
-            except httpx.HTTPError as error:
+            except httpx.TransportError as error:
+                # Solo conexión/timeout se reintentan (además de 5xx).
                 logger.warning(
                     "Fallo al consultar el servicio de servicios externos: %s",
                     type(error).__name__,
                 )
                 ultimo_error = ServiceUnavailableException(causa=type(error).__name__)
+            except httpx.HTTPError as error:
+                # Otros errores de httpx no se reintentan.
+                raise ServiceUnavailableException(causa=type(error).__name__) from error
         raise ultimo_error or ServiceUnavailableException()
 
     def _enviar(self, url: str, cuerpo: dict, headers: dict) -> httpx.Response:
