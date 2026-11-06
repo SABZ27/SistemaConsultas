@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 
+from app.core.password_policy import validar_password
 from app.core.security import create_access_token, hash_password, verify_password
 from app.exceptions.errors import BadRequestException
 from app.mappers.usuario import nombre_completo
@@ -13,6 +14,7 @@ from app.repositories.modulo_x_rol import ModuloXRolRepository
 from app.repositories.password_reset_token import PasswordResetTokenRepository
 from app.repositories.usuario import UsuarioRepository
 from app.schemas.auth import (
+    CambiarPasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
@@ -112,7 +114,37 @@ class AuthService:
             raise BadRequestException("El token ha expirado.")
 
         usuario = password_reset_token.usuario
+        error = validar_password(
+            req.nuevaPassword,
+            correo=usuario.correo,
+            nombre=usuario.nombre,
+            apellido=usuario.apellido,
+            identificacion=usuario.identificacion,
+        )
+        if error:
+            raise BadRequestException(error, errors={"nuevaPassword": error})
+
         usuario.password = hash_password(req.nuevaPassword)
         password_reset_token.utilizado = True
         password_reset_token.estado = False
+        self.user_repo.save(usuario)
+
+    def cambiar_password(self, usuario: Usuario, req: CambiarPasswordRequest) -> None:
+        if not verify_password(req.passwordActual, usuario.password):
+            raise BadRequestException("La contraseña actual es incorrecta.")
+        if verify_password(req.nuevaPassword, usuario.password):
+            mensaje = "La nueva contraseña debe ser diferente a la actual."
+            raise BadRequestException(mensaje, errors={"nuevaPassword": mensaje})
+
+        error = validar_password(
+            req.nuevaPassword,
+            correo=usuario.correo,
+            nombre=usuario.nombre,
+            apellido=usuario.apellido,
+            identificacion=usuario.identificacion,
+        )
+        if error:
+            raise BadRequestException(error, errors={"nuevaPassword": error})
+
+        usuario.password = hash_password(req.nuevaPassword)
         self.user_repo.save(usuario)

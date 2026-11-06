@@ -3,7 +3,9 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.password_policy import validar_password_admin
 from app.core.security import hash_password
+from app.exceptions.errors import AdminPasswordError
 from app.models.enums import Rol
 from app.models.modulo_sistema import ModuloSistema
 from app.models.modulo_x_rol import ModuloXRol
@@ -113,6 +115,36 @@ def _sembrar_modulos_x_rol(db: Session) -> None:
                 continue
             if repo.find_by_rol_and_modulo(rol.id, modulo.id) is None:
                 repo.save(ModuloXRol(rol_id=rol.id, modulo_id=modulo.id))
+
+
+def verificar_password_admin(db: Session) -> None:
+    """Impide crear el administrador inicial con una contraseña débil.
+
+    Si el administrador ya existe, solo se registra un aviso: la contraseña
+    del entorno no se aplica sobre un usuario existente. El mensaje nunca
+    incluye la contraseña.
+    """
+    if not settings.admin_password:
+        return
+
+    error = validar_password_admin(
+        settings.admin_password,
+        correo=settings.admin_correo,
+        identificacion=settings.admin_identificacion,
+    )
+    if error is None:
+        return
+
+    if UsuarioRepository(db).find_admin_activo() is not None:
+        logger.warning(
+            "ADMIN_PASSWORD no cumple la política de contraseñas, pero el "
+            "administrador ya existe; no se aplica."
+        )
+        return
+
+    raise AdminPasswordError(
+        f"ADMIN_PASSWORD no cumple la política de contraseñas: {error}"
+    )
 
 
 def _sembrar_admin(db: Session) -> None:

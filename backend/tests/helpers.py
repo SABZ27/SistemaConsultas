@@ -14,7 +14,7 @@ def _registrar_y_login(client, rol, correo, identificacion, n, programa_id=None,
         "nombre": nombre or f"Nombre{n}",
         "apellido": "Apellido",
         "correo": correo,
-        "password": "contrasenia123",
+        "password": "ClaveSegura#2026",
         "rol": rol,
     }
     if programa_id is not None:
@@ -31,7 +31,7 @@ def crear_usuario(client, rol="ESTUDIANTE", correo=None, identificacion=None):
     return _registrar_y_login(client, rol, correo, identificacion, n)
 
 
-def login(client, correo, password="contrasenia123"):
+def login(client, correo, password="ClaveSegura#2026"):
     resp = client.post("/auth/login", json={"correo": correo, "password": password})
     assert resp.status_code == 200, resp.text
     return resp.json()

@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
-from app.exceptions.errors import EsquemaAnteriorError
+from app.exceptions.errors import AdminPasswordError, EsquemaAnteriorError
 
 logger = logging.getLogger("sistema_consultas.db")
 
@@ -102,12 +102,15 @@ def init_db() -> None:
         Base.metadata.create_all(bind=engine)
         if engine.dialect.name == "postgresql":
             _crear_triggers_actualizado_postgres()
-        from app.db.seeds import ejecutar_seeds
+        from app.db.seeds import ejecutar_seeds, verificar_password_admin
 
         with SessionLocal() as db:
+            verificar_password_admin(db)
             ejecutar_seeds(db)
             db.commit()
         logger.info("Esquema verificado/creado correctamente en la base de datos.")
+    except AdminPasswordError:
+        raise
     except Exception as exc:  # pragma: no cover
         logger.warning("No se pudo conectar a la base de datos (%s). Verifica DB_URL y que Neon esté activo.", type(exc).__name__)
 

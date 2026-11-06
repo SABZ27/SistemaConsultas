@@ -117,7 +117,7 @@ def test_crear_usuario_por_admin(client):
             "nombre": "Nuevo",
             "apellido": "Docente",
             "correo": "nuevo.docente@test.com",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "DOCENTE",
         },
         headers=auth(admin["token"]),
@@ -127,7 +127,7 @@ def test_crear_usuario_por_admin(client):
 
     login = client.post(
         "/auth/login",
-        json={"correo": "nuevo.docente@test.com", "password": "contrasenia123"},
+        json={"correo": "nuevo.docente@test.com", "password": "ClaveSegura#2026"},
     )
     assert login.status_code == 200
 

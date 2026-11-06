@@ -9,7 +9,7 @@ def test_registrar_estudiante(client):
             "nombre": "Nombre1",
             "apellido": "Apellido",
             "correo": "estudiante@test.com",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "ESTUDIANTE",
         },
     )
@@ -32,7 +32,7 @@ def test_registro_correo_duplicado(client):
             "nombre": "Otro",
             "apellido": "Usuario",
             "correo": "repe@test.com",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "ESTUDIANTE",
         },
     )
@@ -53,7 +53,7 @@ def test_registro_identificacion_duplicada(client):
             "nombre": "Otro",
             "apellido": "Usuario",
             "correo": "otro@test.com",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "ESTUDIANTE",
         },
     )
@@ -69,7 +69,7 @@ def test_registro_rol_admin_rechazado(client):
             "nombre": "Admin",
             "apellido": "Intruso",
             "correo": "admin-intruso@test.com",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "ADMINISTRADOR",
         },
     )
@@ -95,7 +95,7 @@ def test_registro_programa_inexistente(client):
             "nombre": "Prog",
             "apellido": "X",
             "correo": "prog@test.com",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "ESTUDIANTE",
             "programaId": 99999,
         },
@@ -129,7 +129,7 @@ def test_login_usuario_desconocido(client):
 def test_reset_password_token_invalido(client):
     resp = client.post(
         "/auth/reset-password",
-        json={"token": "token-invalido", "nuevaPassword": "nuevaContrasenia"},
+        json={"token": "token-invalido", "nuevaPassword": "OtraClave#2026"},
     )
     assert resp.status_code == 400
     assert resp.json()["error"] == "Bad Request"

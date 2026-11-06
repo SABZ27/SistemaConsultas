@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.schemas.auth import (
+    CambiarPasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
@@ -52,4 +53,14 @@ def olvidar_contrasenia(
 @router.post("/reset-password")
 def restablecer_contrasenia(req: ResetPasswordRequest, db: Session = Depends(get_db)) -> str:
     AuthService(db).reset_password(req)
+    return "Contraseña actualizada correctamente."
+
+
+@router.post("/cambiar-password")
+def cambiar_contrasenia(
+    req: CambiarPasswordRequest,
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+) -> str:
+    AuthService(db).cambiar_password(usuario, req)
     return "Contraseña actualizada correctamente."

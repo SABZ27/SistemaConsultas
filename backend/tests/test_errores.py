@@ -69,7 +69,7 @@ def test_validacion_correo_formato(client):
             "nombre": "X",
             "apellido": "Y",
             "correo": "correo-mal-formato",
-            "password": "contrasenia123",
+            "password": "ClaveSegura#2026",
             "rol": "ESTUDIANTE",
         },
     )

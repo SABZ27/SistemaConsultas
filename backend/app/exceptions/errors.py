@@ -5,9 +5,10 @@ class ResourceNotFoundException(Exception):
 
 
 class BadRequestException(Exception):
-    def __init__(self, message: str):
+    def __init__(self, message: str, errors: dict | None = None):
         super().__init__(message)
         self.message = message
+        self.errors = errors
 
 
 class ServiceUnavailableException(Exception):
@@ -26,6 +27,14 @@ class ServiceUnavailableException(Exception):
 
 
 class EsquemaAnteriorError(RuntimeError):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+class AdminPasswordError(RuntimeError):
+    """La contraseña del administrador inicial no cumple la política."""
+
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message

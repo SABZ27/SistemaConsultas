@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
+from pydantic import BaseModel, ConfigDict, Field, BeforeValidator, model_validator
 
+from app.core.password_policy import PasswordPolicyError, validar_password
 from app.models.enums import Rol
 from app.schemas.validaciones import validar_correo
 
@@ -50,4 +51,25 @@ class ResetPasswordRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     token: str = Field(min_length=1)
-    nuevaPassword: str = Field(min_length=8, max_length=100)
+    nuevaPassword: str
+
+    @model_validator(mode="after")
+    def _validar_nueva_password(self):
+        error = validar_password(self.nuevaPassword)
+        if error:
+            raise PasswordPolicyError(error, campo="nuevaPassword")
+        return self
+
+
+class CambiarPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    passwordActual: str = Field(min_length=1)
+    nuevaPassword: str
+
+    @model_validator(mode="after")
+    def _validar_nueva_password(self):
+        error = validar_password(self.nuevaPassword)
+        if error:
+            raise PasswordPolicyError(error, campo="nuevaPassword")
+        return self

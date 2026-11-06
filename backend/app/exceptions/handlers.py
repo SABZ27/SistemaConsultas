@@ -77,6 +77,7 @@ def _traducir_errores(exc: RequestValidationError) -> dict[str, str]:
             mensaje = _mensaje_longitud(campo, tipo, ctx)
         elif tipo == "value_error":
             err = ctx.get("error")
+            campo = getattr(err, "campo", campo)
             mensaje = str(err) if err else "Valor inválido."
         elif tipo in ("literal_error", "enum"):
             mensaje = f"{etiqueta_campo(campo)} no es un valor válido. Valores permitidos: {ctx.get('expected', 'consulta la documentación')}"
@@ -116,7 +117,11 @@ def resource_not_found_handler(_request, exc: ResourceNotFoundException) -> JSON
 def bad_request_exception_handler(_request, exc: BadRequestException) -> JSONResponse:
     return JSONResponse(
         status_code=400,
-        content=_cuerpo(400, exc.message or "Solicitud inválida."),
+        content=_cuerpo(
+            400,
+            exc.message or "Solicitud inválida.",
+            errors=getattr(exc, "errors", None),
+        ),
     )
 
 
