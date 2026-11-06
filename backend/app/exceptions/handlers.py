@@ -9,6 +9,7 @@ from app.exceptions.errors import (
     BadRequestException,
     ResourceNotFoundException,
     ServiceUnavailableException,
+    TooManyRequestsException,
 )
 from app.schemas.mensajes import etiqueta_campo
 
@@ -21,7 +22,9 @@ NOMBRE_ERROR = {
     404: "Not Found",
     405: "Method Not Allowed",
     409: "Conflict",
+    413: "Payload Too Large",
     422: "Unprocessable Entity",
+    429: "Too Many Requests",
     500: "Internal Server Error",
     503: "Service Unavailable",
 }
@@ -132,6 +135,22 @@ def service_unavailable_handler(_request, exc: ServiceUnavailableException) -> J
     )
 
 
+def too_many_requests_handler(
+    _request, exc: TooManyRequestsException
+) -> JSONResponse:
+    headers = {}
+    if exc.retry_after is not None:
+        headers["Retry-After"] = str(exc.retry_after)
+    return JSONResponse(
+        status_code=429,
+        content=_cuerpo(
+            429,
+            exc.message or "Demasiadas solicitudes. Intenta de nuevo más tarde.",
+        ),
+        headers=headers,
+    )
+
+
 def http_exception_handler(_request, exc: StarletteHTTPException) -> JSONResponse:
     detalle = exc.detail
     mensaje = detalle if isinstance(detalle, str) else "Ocurrió un error."
@@ -142,7 +161,8 @@ def http_exception_handler(_request, exc: StarletteHTTPException) -> JSONRespons
 
 
 def unhandled_exception_handler(_request, exc: Exception) -> JSONResponse:
-    logger.exception("Error no controlado.", exc_info=exc)
+    # Solo el tipo: el mensaje podría contener correos, tokens o contraseñas.
+    logger.error("Error no controlado (%s).", type(exc).__name__)
     return JSONResponse(
         status_code=500,
         content=_cuerpo(500, "Error interno del servidor."),

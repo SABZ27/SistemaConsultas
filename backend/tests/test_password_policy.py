@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app.core.config import settings
+from app.core.security import hash_token
 from app.core.password_policy import (
     MENSAJE_COMUN,
     MENSAJE_COMPOSICION,
@@ -40,7 +41,7 @@ def _crear_token_reset(correo, token="token-reset-1"):
         assert usuario is not None
         db.add(
             PasswordResetToken(
-                token=token,
+                token=hash_token(token),
                 usuario_id=usuario.id,
                 fecha_expiracion=datetime.now() + timedelta(minutes=30),
                 utilizado=False,

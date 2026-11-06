@@ -2,6 +2,10 @@ require('dotenv').config();
 
 const NOMBRE_POR_DEFECTO = 'sistema_consultas_infra_test';
 const SUFIJO_OBLIGATORIO = '_test';
+// Valores fijos de pruebas: nunca se toman del .env real.
+const JWT_SECRET_PRUEBAS =
+  'secreto-de-pruebas-con-mas-de-treinta-y-dos-caracteres';
+const CORS_ORIGINS_PRUEBAS = 'http://localhost:5173,http://localhost:3000';
 
 // El nombre de la base de pruebas es EXCLUSIVAMENTE TEST_DB_NAME (o su valor por
 // defecto). No se deriva de DB_NAME ni se recalcula a partir de DB_NAME, de modo
@@ -53,8 +57,8 @@ function aplicarEnvDePrueba(workerId) {
   process.env.DB_USER = config.user;
   process.env.DB_PASSWORD = config.password;
   process.env.DB_NAME = config.database;
-  process.env.JWT_SECRET =
-    process.env.JWT_SECRET || 'secreto-de-pruebas-con-mas-de-treinta-y-dos-caracteres';
+  process.env.JWT_SECRET = JWT_SECRET_PRUEBAS;
+  process.env.CORS_ORIGINS = CORS_ORIGINS_PRUEBAS;
   process.env.NODE_ENV = 'test';
 
   return config;
@@ -63,6 +67,8 @@ function aplicarEnvDePrueba(workerId) {
 module.exports = {
   NOMBRE_POR_DEFECTO,
   SUFIJO_OBLIGATORIO,
+  JWT_SECRET_PRUEBAS,
+  CORS_ORIGINS_PRUEBAS,
   partesBase,
   nombreParaWorker,
   resolverConfigDePrueba,

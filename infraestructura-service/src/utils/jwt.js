@@ -15,7 +15,13 @@ function verificarToken(token) {
   if (!env.jwtSecret) {
     throw noAutorizado('El servicio no tiene configurado JWT_SECRET.');
   }
-  return jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] });
+
+  // Solo HS256 y exp obligatorio: un token sin caducidad no es aceptable.
+  const payload = jwt.verify(token, env.jwtSecret, { algorithms: ['HS256'] });
+  if (typeof payload.exp !== 'number') {
+    throw noAutorizado('Token inválido o expirado.');
+  }
+  return payload;
 }
 
 module.exports = { extraerToken, verificarToken };

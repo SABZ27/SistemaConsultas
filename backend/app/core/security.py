@@ -1,9 +1,15 @@
 import datetime as dt
+import hashlib
+import secrets
 
 import bcrypt
 import jwt
 
 from app.core.config import settings
+
+# Rol del token interno (servicio a servicio). El microservicio Express exige
+# este rol en POST /correos: solo el backend FastAPI puede pedir correos.
+ROL_SERVICIO = "SERVICIO"
 
 
 def hash_password(password: str) -> str:
@@ -31,22 +37,40 @@ def create_access_token(correo: str, uid: int, rol: str, modulos: list[str]) -> 
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def decode_token(token: str) -> str:
-    payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+def decode_token(token: str) -> str | None:
+    """Valida un token de usuario.
+
+    Exige exp, sub, uid y rol; rechaza los tokens de servicio (rol SERVICIO o
+    uid 0) para que no sirvan en endpoints de usuario.
+    """
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret,
+        algorithms=["HS256"],
+        options={"require": ["exp", "sub", "uid", "rol"]},
+    )
+    if payload.get("rol") == ROL_SERVICIO or payload.get("uid") == 0:
+        raise jwt.InvalidTokenError("Token de servicio no válido para usuarios.")
+
     sub = payload.get("sub")
-    return sub if isinstance(sub, str) else None
+    if not isinstance(sub, str) or not sub:
+        raise jwt.InvalidTokenError("Token sin usuario.")
+    return sub
 
 
-# Rol del token interno (servicio a servicio). El microservicio Express exige
-# este rol en POST /correos: solo el backend FastAPI puede pedir correos.
-ROL_SERVICIO = "SERVICIO"
+def generar_token_reset() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def crear_token_interno(minutos: int = 5) -> str:
     """Token de servicio a servicio (mismo JWT_SECRET que el microservicio).
 
     Se usa para las llamadas a Express que no son de un usuario (por ejemplo,
-    el envÃ­o de correos). Vive muy poco tiempo: solo debe servir para la
+    el envío de correos). Vive muy poco tiempo: solo debe servir para la
     llamada en curso.
     """
     ahora = dt.datetime.now(dt.timezone.utc)

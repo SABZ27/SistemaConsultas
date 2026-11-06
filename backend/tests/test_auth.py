@@ -145,8 +145,10 @@ def test_forgot_password_flujo(client):
 
 def test_forgot_password_usuario_inexistente(client):
     resp = client.post("/auth/forgot-password", json={"correo": "nadie@test.com"})
-    assert resp.status_code == 400
-    assert resp.json()["message"] == "No existe un usuario registrado con ese correo."
+    # Misma respuesta que cuando el usuario existe: no se revela si el correo
+    # está registrado.
+    assert resp.status_code == 200
+    assert resp.json() == "Se ha generado un token de recuperación."
 
 
 def test_programas_requieren_autenticacion(client):

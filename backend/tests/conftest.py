@@ -4,10 +4,13 @@ os.environ["DB_URL"] = "sqlite+pysqlite:///./test_bd.sqlite3"
 os.environ["ADMIN_CORREO"] = "admin@test.com"
 os.environ["ADMIN_PASSWORD"] = "ClaveSegura#2026"
 os.environ["ADMIN_IDENTIFICACION"] = "9000000000"
+os.environ["JWT_SECRET"] = "secreto-de-pruebas-con-mas-de-treinta-y-dos-caracteres"
+os.environ["CORS_ORIGINS"] = "http://testserver,http://localhost:5173"
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.rate_limit import reiniciar_limitadores
 from app.db.session import engine
 from app.main import app
 from app.models import Base
@@ -28,6 +31,14 @@ def _limpiar_bd(_esquema):
         for tabla in reversed(Base.metadata.sorted_tables):
             conn.execute(tabla.delete())
     yield
+
+
+@pytest.fixture(autouse=True)
+def _reiniciar_limitadores():
+    """Cada prueba empieza con los limitadores vacíos."""
+    reiniciar_limitadores()
+    yield
+    reiniciar_limitadores()
 
 
 @pytest.fixture()

@@ -24,18 +24,22 @@ from app.api.routes import (
     usuarios,
     zonas,
 )
+from app.core.config import origenes_cors, settings, validar_jwt_secret
+from app.core.limite_cuerpo import MAX_CUERPO_BYTES, LimiteCuerpoMiddleware
 from app.core.security import decode_token
 from app.db.session import init_db
 from app.exceptions.errors import (
     BadRequestException,
     ResourceNotFoundException,
     ServiceUnavailableException,
+    TooManyRequestsException,
 )
 from app.exceptions.handlers import (
     bad_request_exception_handler,
     http_exception_handler,
     resource_not_found_handler,
     service_unavailable_handler,
+    too_many_requests_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
@@ -48,6 +52,9 @@ async def lifespan(_app: FastAPI):
 
 
 def crear_app() -> FastAPI:
+    validar_jwt_secret(settings.jwt_secret)
+    origenes = origenes_cors(settings.cors_origins)
+
     app = FastAPI(
         title="Sistema Consultas - API",
         description="API del sistema de gestión de consultas académicas (IUB).",
@@ -55,12 +62,15 @@ def crear_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # El límite de cuerpo va dentro de CORS para que el 413 conserve sus
+    # cabeceras; las cabeceras de seguridad envuelven a ambos.
+    app.add_middleware(LimiteCuerpoMiddleware, max_bytes=MAX_CUERPO_BYTES)
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=".*",
+        allow_origins=origenes,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
     @app.middleware("http")
@@ -76,10 +86,31 @@ def crear_app() -> FastAPI:
         _request.state.usuario_correo = correo
         return await call_next(_request)
 
+    @app.middleware("http")
+    async def _cabeceras_seguridad(request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Permissions-Policy", "geolocation=(), camera=(), microphone=()"
+        )
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+
+        proto = request.headers.get("x-forwarded-proto", "")
+        proto = proto.split(",")[0].strip().lower()
+        if request.url.scheme == "https" or proto == "https":
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
+        return response
+
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ResourceNotFoundException, resource_not_found_handler)
     app.add_exception_handler(BadRequestException, bad_request_exception_handler)
     app.add_exception_handler(ServiceUnavailableException, service_unavailable_handler)
+    app.add_exception_handler(TooManyRequestsException, too_many_requests_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 

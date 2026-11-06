@@ -9,9 +9,9 @@ class PasswordResetTokenRepository(RepoBase):
         super().__init__(db)
         self.cls = PasswordResetToken
 
-    def find_by_token(self, token: str) -> PasswordResetToken | None:
+    def find_by_token(self, token_hash: str) -> PasswordResetToken | None:
         return self.db.query(PasswordResetToken).filter(
-            PasswordResetToken.token == token,
+            PasswordResetToken.token == token_hash,
             PasswordResetToken.estado.is_(True),
         ).first()
 

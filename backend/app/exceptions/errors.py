@@ -26,6 +26,17 @@ class ServiceUnavailableException(Exception):
         self.causa = causa
 
 
+class TooManyRequestsException(Exception):
+    def __init__(
+        self,
+        message: str = "Demasiadas solicitudes. Intenta de nuevo más tarde.",
+        retry_after: int | None = None,
+    ):
+        super().__init__(message)
+        self.message = message
+        self.retry_after = retry_after
+
+
 class EsquemaAnteriorError(RuntimeError):
     def __init__(self, message: str):
         super().__init__(message)

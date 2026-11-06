@@ -1,7 +1,8 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.rate_limit import obtener_ip
 from app.db.session import get_db
 from app.schemas.auth import (
     CambiarPasswordRequest,
@@ -27,23 +28,32 @@ def mi_perfil(
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def registrar_usuario(req: RegistroUsuarioRequest, db: Session = Depends(get_db)) -> str:
-    AuthService(db).registro(req)
+def registrar_usuario(
+    req: RegistroUsuarioRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> str:
+    AuthService(db).registro(req, obtener_ip(request))
     return "Usuario registrado correctamente."
 
 
 @router.post("/login", response_model=LoginResponse)
-def iniciar_sesion(req: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
-    return AuthService(db).login(req)
+def iniciar_sesion(
+    req: LoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    return AuthService(db).login(req, obtener_ip(request))
 
 
 @router.post("/forgot-password")
 def olvidar_contrasenia(
     req: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> str:
-    correo = AuthService(db).forgot_password(req)
+    correo = AuthService(db).forgot_password(req, obtener_ip(request))
     if correo is not None:
         # El correo se envía en segundo plano (después del commit).
         background_tasks.add_task(EmailService().enviar, correo)
@@ -51,8 +61,12 @@ def olvidar_contrasenia(
 
 
 @router.post("/reset-password")
-def restablecer_contrasenia(req: ResetPasswordRequest, db: Session = Depends(get_db)) -> str:
-    AuthService(db).reset_password(req)
+def restablecer_contrasenia(
+    req: ResetPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> str:
+    AuthService(db).reset_password(req, obtener_ip(request))
     return "Contraseña actualizada correctamente."
 
 

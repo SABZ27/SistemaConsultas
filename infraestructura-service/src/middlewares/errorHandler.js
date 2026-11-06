@@ -17,7 +17,15 @@ function errorHandler(error, _req, res, _next) {
   if (error && error.type === 'entity.parse.failed') {
     return res.status(400).json(cuerpoError(400, 'El cuerpo de la solicitud no es un JSON válido.'));
   }
-  console.error('Error no controlado:', error);
+  if (error && (error.type === 'entity.too.large' || error.status === 413)) {
+    return res
+      .status(413)
+      .json(cuerpoError(413, 'El cuerpo de la solicitud es demasiado grande.'));
+  }
+
+  // Solo el tipo: el mensaje podria contener correos, tokens o contenidos.
+  const tipo = error && error.name ? error.name : 'Error';
+  console.error('Error no controlado (%s).', tipo);
   return res.status(500).json(cuerpoError(500, 'Error interno del servidor.'));
 }
 
