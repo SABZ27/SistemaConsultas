@@ -62,7 +62,13 @@ roles y módulos. El periodo usa el nombre `2026-1` y el rango
 `2026-01-01` → `2026-12-31`, que cubre el semestre actual (2026-2,
 julio–diciembre), y lleva **un comentario que indica que las fechas y el
 nombre deben ajustarse al calendario académico real** antes de ejecutarlo en
-un entorno definitivo. El `LEEME` lo recuerda aquí también.
+un entorno definitivo. El `LEEME` lo recuerda aquí también:
+
+> **El periodo `2026-1` del seed (1 de enero a 31 de diciembre de 2026) debe
+> ajustarse al calendario real.** Es el rango anual que genera
+> `ejecutar_seeds()`, no una fecha académica oficial; antes de usar estos
+> scripts hay que sustituir el nombre, `fecha_inicio` y `fecha_fin` por los
+> valores del calendario institucional.
 
 Todos los bloques son idempotentes (`INSERT ... SELECT ... WHERE NOT EXISTS`),
 respetan la comprobación de solape de periodos y **no insertan el usuario

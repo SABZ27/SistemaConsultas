@@ -121,5 +121,44 @@ defectos:
 El inventario de cobertura y la revisión de datos personales están en
 `docs/cobertura-seguridad.md`; la auditoría de dependencias, en
 `docs/auditoria-dependencias.md`. `get_current_user_optional` se documenta
-allí como código muerto y **no se elimina**. Ninguna propuesta de reducción de
-datos personales se ha aplicado.
+allí como código muerto y **no se elimina**. La reducción de datos personales
+**sí se aplicó en el Bloque G** (ver sección siguiente); siguen abiertas las
+propuestas de retirar definitivamente los campos del contrato y de revisar
+`estado`/`fechaCreacion` en el listado de usuarios.
+
+## Bloque G: datos personales y parche de dependencia
+
+- **Enmascaramiento por rol, sin eliminar campos del contrato**:
+  `identificacionEstudiante` e `identificacionDocente` de
+  `SolicitudConsultaResponse`, y `identificacion`/`correo` de
+  `UsuarioResponse`, pasan a `str | None`. Cada participante ve solo su propia
+  identificación, la de la otra parte sale `null` y `ADMINISTRADOR` ve ambas;
+  en usuarios solo el propio usuario y el administrador ven identificación y
+  correo. Se implementa en `app/mappers/solicitud_consulta.py`,
+  `app/mappers/usuario.py`, `app/services/*.py` y las rutas de `usuarios.py`.
+- **`body-parser` 1.20.9**: corregido de forma selectiva en
+  `infraestructura-service/package-lock.json` con `npm update body-parser`
+  (sin `--force`); `npm audit fix` también habría subido `qs`, fuera de
+  alcance. **`zod` queda diferido**: su aviso exige 4.6.7, un cambio mayor de
+  3.x a 4.x que obligaría a reescribir los validadores y rompería
+  compatibilidad. Detalle en `docs/auditoria-dependencias.md`.
+- **Registro público de `DOCENTE`**: cualquiera puede darse de alta como
+  docente y esas cuentas aparecen en el listado de docentes. Una cuenta
+  auto-registrada **no recibe consultas por sí sola**: requiere que un
+  administrador la asigne al módulo (`docentes-modulos`) y que tenga
+  disponibilidad. Detalle en `docs/cobertura-seguridad.md`.
+- `get_current_user_optional` sigue siendo código muerto documentado y **no se
+  elimina**.
+
+## Índice de decisiones de seguridad
+
+- Resolución de IP y medición de `TRUSTED_PROXY_HOPS`: sección
+  «IP del cliente detrás de proxies» de este archivo.
+- Fail-closed de festivos: «Validación de festivos (fail-closed desde el
+  Bloque A)» y «Limitación: dependencia del proveedor».
+- Seguridad implementada (JWT, límites, cabeceras, recuperación, token
+  `SERVICIO`): `docs/04-Seguridad.md`.
+- Cobertura, datos personales y limitaciones: `docs/cobertura-seguridad.md`.
+- Dependencias: `docs/auditoria-dependencias.md`.
+- Contratos y códigos HTTP: `docs/05-API.md`.
+- Scripts SQL de entrega: `docs/sql/LEEME.md`.

@@ -13,6 +13,15 @@ Uso:
 No se ejecuta automáticamente. Si crea datos, pide confirmación explícita por
 consola. Las contraseñas se leen por variable de entorno o por entrada oculta,
 nunca por argumento ni guardadas en archivos.
+
+Sondas añadidas en el Bloque F:
+  * F11: contraseña débil -> 400 (registro y POST /auth/cambiar-password).
+  * F12: 5 intentos fallidos -> 429 con Retry-After. F12 deja el correo de
+    prueba bloqueado 15 minutos (LOGIN_PAR_BLOQUEO_SEGUNDOS).
+
+El script NO debe ejecutarse contra producción sin autorización explícita:
+crea datos de prueba y bloquea cuentas durante 15 minutos. No se ejecuta en
+este bloque; solo se actualiza su código.
 """
 
 from __future__ import annotations
@@ -83,6 +92,21 @@ def register(client, correo, identificacion, rol):
             "apellido": "Prueba",
             "correo": correo,
             "password": PASSWORD,
+            "rol": rol,
+        },
+    )
+
+
+def register_con_password(client, correo, identificacion, rol, password):
+    """Igual que register, pero permite enviar una contraseña débil (F11)."""
+    return client.post(
+        f"{FASTAPI_URL}/auth/register",
+        json={
+            "identificacion": identificacion,
+            "nombre": "Nombre",
+            "apellido": "Prueba",
+            "correo": correo,
+            "password": password,
             "rol": rol,
         },
     )
@@ -260,6 +284,50 @@ def main() -> int:
         )
         ok = r.status_code == 200 and r.json().get("nombreRecursoFisico") == recurso.get("ubicacion")
         check("F10a docente asignado asigna recurso", ok, f"{r.status_code} ubicacion={r.json().get('nombreRecursoFisico') if r.status_code==200 else '-'!r}")
+
+        # --- F11: contraseña débil -> 400 (registro y cambio de clave) ---
+        # Campos reales del body: passwordActual / nuevaPassword (solo POST).
+        debil = "123"
+        r = register_con_password(
+            client, f"debil.seg.{marca}@test.com", _nar(), "ESTUDIANTE", debil
+        )
+        check(
+            "F11a registro con contraseña débil -> 400",
+            r.status_code == 400 and "password" in (r.json().get("errors") or {}),
+            f"{r.status_code}",
+        )
+        r = client.post(
+            f"{FASTAPI_URL}/auth/cambiar-password",
+            json={"passwordActual": PASSWORD, "nuevaPassword": debil},
+            headers=hdr(duena["token"]),
+        )
+        check(
+            "F11b POST /auth/cambiar-password con contraseña débil -> 400",
+            r.status_code == 400
+            and "nuevaPassword" in (r.json().get("errors") or {}),
+            f"{r.status_code}",
+        )
+
+        # --- F12: bloqueo tras intentos fallidos -> 429 con Retry-After ---
+        # Esta sonda bloquea al correo de prueba 15 minutos (pareja correo+IP,
+        # LOGIN_PAR_BLOQUEO_SEGUNDOS). No crea la cuenta: el limitador cuenta
+        # los fallos aunque el correo no exista. El script NO debe ejecutarse
+        # contra producción sin autorización explícita.
+        correo_bloqueo = f"bloqueo.seg.{marca}@test.com"
+        for _ in range(5):
+            login(client, correo_bloqueo, "incorrecta")
+        r = login(client, correo_bloqueo, "incorrecta")
+        check(
+            "F12a 5 fallos bloquean la pareja -> 429",
+            r.status_code == 429,
+            f"{r.status_code}",
+        )
+        reintento = r.headers.get("Retry-After", "")
+        check(
+            "F12b el 429 incluye Retry-After > 0",
+            reintento.isdigit() and int(reintento) > 0,
+            f"Retry-After={reintento or '-'}",
+        )
 
     return _resumen()
 
