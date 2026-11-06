@@ -16,6 +16,7 @@ from app.core.config import (
 from app.core.rate_limit import (
     LIMITE_LOGIN_IP,
     LIMITE_LOGIN_PAR,
+    MAX_CLAVES_LIMITADOR,
     MENSAJE_DEMASIADAS_SOLICITUDES,
     MENSAJE_DEMASIADOS_INTENTOS,
     RateLimiter,
@@ -28,10 +29,16 @@ from app.models.password_reset_token import PasswordResetToken
 from tests.helpers import crear_usuario, login
 
 PASSWORD = "ClaveSegura#2026"
+IP_EDGE = "172.64.0.1"
 
 
-def _login_falla(client, correo, ip=None, password="incorrecta"):
-    headers = {"X-Forwarded-For": ip} if ip is not None else {}
+def _xff(cliente):
+    """Cadena observada detrás de Cloudflare + Render."""
+    return f"{cliente}, {IP_EDGE}"
+
+
+def _login_falla(client, correo, xff=None, password="incorrecta"):
+    headers = {"X-Forwarded-For": xff} if xff is not None else {}
     return client.post(
         "/auth/login",
         json={"correo": correo, "password": password},
@@ -39,11 +46,11 @@ def _login_falla(client, correo, ip=None, password="incorrecta"):
     )
 
 
-def _login_ok(client, correo, ip):
+def _login_ok(client, correo, xff):
     return client.post(
         "/auth/login",
         json={"correo": correo, "password": PASSWORD},
-        headers={"X-Forwarded-For": ip},
+        headers={"X-Forwarded-For": xff},
     )
 
 
@@ -52,52 +59,93 @@ def _login_ok(client, correo, ip):
 # ---------------------------------------------------------------------------
 
 
-def test_obtener_ip_usa_la_ultima_entrada_de_x_forwarded_for():
+def test_obtener_ip_con_hops_1_usa_el_cliente_no_el_edge(monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
     peticion = SimpleNamespace(
-        headers={"x-forwarded-for": "203.0.113.1, 198.51.100.9"},
+        headers={"x-forwarded-for": f"203.0.113.10, {IP_EDGE}"},
         client=SimpleNamespace(host="192.0.2.10"),
     )
 
-    assert obtener_ip(peticion) == "198.51.100.9"
+    assert obtener_ip(peticion) == "203.0.113.10"
 
 
-def test_obtener_ip_usa_conexion_directa_sin_encabezado():
+def test_obtener_ip_cae_a_client_host_si_faltan_entradas_o_es_invalida(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
+    base = {
+        "client": SimpleNamespace(host="192.0.2.10"),
+    }
+
+    sin_encabezado = SimpleNamespace(headers={}, **base)
+    assert obtener_ip(sin_encabezado) == "192.0.2.10"
+
+    # Con hops=1 hacen falta al menos 2 entradas.
+    pocas = SimpleNamespace(headers={"x-forwarded-for": "203.0.113.10"}, **base)
+    assert obtener_ip(pocas) == "192.0.2.10"
+
+    invalida = SimpleNamespace(
+        headers={"x-forwarded-for": f"no-es-ip, {IP_EDGE}"},
+        **base,
+    )
+    assert obtener_ip(invalida) == "192.0.2.10"
+
+
+def test_diagnostico_ip_solo_registra_conteos(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
+    monkeypatch.setattr(settings, "diagnostico_ip", True)
     peticion = SimpleNamespace(
-        headers={},
+        headers={
+            "x-forwarded-for": f"203.0.113.10, {IP_EDGE}",
+            "true-client-ip": "203.0.113.10",
+        },
         client=SimpleNamespace(host="192.0.2.10"),
     )
 
-    assert obtener_ip(peticion) == "192.0.2.10"
+    with caplog.at_level("INFO", logger="sistema_consultas.ip"):
+        assert obtener_ip(peticion) == "203.0.113.10"
+
+    assert "x_forwarded_for_entradas=2" in caplog.text
+    assert "true_client_ip=True" in caplog.text
+    assert "203.0.113.10" not in caplog.text
+    assert IP_EDGE not in caplog.text
 
 
-def test_dos_ips_se_limitan_por_separado(client):
+def test_dos_ips_se_limitan_por_separado(client, monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
     crear_usuario(client, correo="ip@test.com")
+    xff = _xff("198.51.100.1")
 
     for _ in range(5):
-        assert _login_falla(client, "ip@test.com", "198.51.100.1").status_code == 401
+        assert _login_falla(client, "ip@test.com", xff).status_code == 401
 
-    bloqueada = _login_falla(client, "ip@test.com", "198.51.100.1")
+    bloqueada = _login_falla(client, "ip@test.com", xff)
     assert bloqueada.status_code == 429
     assert bloqueada.json()["message"] == MENSAJE_DEMASIADOS_INTENTOS
     assert int(bloqueada.headers["Retry-After"]) > 0
 
-    otra_ip = _login_falla(client, "ip@test.com", "198.51.100.2")
+    otra_ip = _login_falla(client, "ip@test.com", _xff("198.51.100.2"))
     assert otra_ip.status_code == 401
 
 
-def test_primera_entrada_falsificada_no_cambia_la_clave(client):
+def test_entradas_falsificadas_antepuestas_no_cambian_la_clave(client, monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
+
     for _ in range(5):
         assert (
             _login_falla(
                 client,
                 "spoof@test.com",
-                "203.0.113.50, 198.51.100.7",
+                f"203.0.113.50, {_xff('198.51.100.7')}",
             ).status_code
             == 401
         )
 
-    # Cambia la primera entrada (falsificable), pero la última IP es la misma.
-    resp = _login_falla(client, "spoof@test.com", "192.0.2.99, 198.51.100.7")
+    # Cambia la entrada falsificable de la izquierda; el cliente real y el
+    # edge de la derecha siguen siendo los mismos.
+    resp = _login_falla(
+        client, "spoof@test.com", f"192.0.2.99, {_xff('198.51.100.7')}"
+    )
     assert resp.status_code == 429
 
 
@@ -106,17 +154,18 @@ def test_primera_entrada_falsificada_no_cambia_la_clave(client):
 # ---------------------------------------------------------------------------
 
 
-def test_login_correcto_limpia_solo_la_pareja_correo_ip(client):
+def test_login_correcto_limpia_solo_la_pareja_correo_ip(client, monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
     crear_usuario(client, correo="pareja@test.com")
-    ip = "198.51.100.50"
+    xff = _xff("198.51.100.50")
 
     for _ in range(4):
-        assert _login_falla(client, "pareja@test.com", ip).status_code == 401
+        assert _login_falla(client, "pareja@test.com", xff).status_code == 401
 
     assert LIMITE_LOGIN_PAR.claves_actuales == 1
     assert LIMITE_LOGIN_IP.claves_actuales == 1
 
-    assert _login_ok(client, "pareja@test.com", ip).status_code == 200
+    assert _login_ok(client, "pareja@test.com", xff).status_code == 200
 
     assert LIMITE_LOGIN_PAR.claves_actuales == 0
     assert LIMITE_LOGIN_IP.claves_actuales == 1
@@ -124,20 +173,26 @@ def test_login_correcto_limpia_solo_la_pareja_correo_ip(client):
     # El contador de la IP sigue vivo: 15 fallos de otros correos + 1 más
     # alcanzan el máximo de 20 aunque la pareja se haya limpiado.
     for i in range(15):
-        assert _login_falla(client, f"otro{i}@test.com", ip).status_code == 401
+        assert _login_falla(client, f"otro{i}@test.com", xff).status_code == 401
 
-    assert _login_falla(client, "pareja@test.com", ip).status_code == 401
-    assert _login_ok(client, "pareja@test.com", ip).status_code == 429
+    assert _login_falla(client, "pareja@test.com", xff).status_code == 401
+    assert _login_ok(client, "pareja@test.com", xff).status_code == 429
 
 
-def test_limite_por_correo_frena_ataques_distribuidos(client):
+def test_limite_por_correo_frena_ataques_distribuidos(client, monkeypatch):
+    monkeypatch.setattr(settings, "trusted_proxy_hops", 1)
     correo = "distribuido@test.com"
 
     for i in range(15):
-        assert _login_falla(client, correo, f"198.51.100.{i + 10}").status_code == 401
+        assert (
+            _login_falla(
+                client, correo, _xff(f"198.51.100.{i + 10}")
+            ).status_code
+            == 401
+        )
 
     # Una IP nueva no evita el límite solo-correo.
-    resp = _login_falla(client, correo, "203.0.113.200")
+    resp = _login_falla(client, correo, _xff("203.0.113.200"))
     assert resp.status_code == 429
     assert resp.json()["message"] == MENSAJE_DEMASIADOS_INTENTOS
 
@@ -183,6 +238,33 @@ def test_limitador_respeta_el_tope_de_claves():
     assert limitador.claves_actuales == 3
 
 
+def test_tope_10000_purga_vencidos_y_luego_evita_las_mas_antiguas():
+    ahora = [0.0]
+    limitador = RateLimiter(
+        maximo=1,
+        ventana_segundos=100,
+        max_claves=MAX_CLAVES_LIMITADOR,
+        reloj=lambda: ahora[0],
+    )
+
+    for i in range(MAX_CLAVES_LIMITADOR):
+        assert limitador.permitir(f"clave-{i}").permitido
+
+    # Al llenarse, la clave más antigua se elimina para dejar entrar la nueva.
+    assert limitador.permitir("nueva").permitido
+    assert limitador.claves_actuales == MAX_CLAVES_LIMITADOR
+    assert limitador.permitir("nueva").permitido is False
+
+    # "clave-0" era la más antigua: al ser desalojada vuelve a tener cupo.
+    assert limitador.permitir("clave-0").permitido is True
+    assert limitador.permitir("clave-0").permitido is False
+
+    # Pasada la ventana, la purga elimina las vencidas antes de desalojar.
+    ahora[0] = 101
+    assert limitador.permitir("tras-expirar").permitido
+    assert limitador.claves_actuales == 1
+
+
 def test_limitador_aplica_bloqueo_temporal():
     ahora = [0.0]
     limitador = RateLimiter(
@@ -209,18 +291,59 @@ def test_limitador_aplica_bloqueo_temporal():
 # ---------------------------------------------------------------------------
 
 
-def test_forgot_password_responde_429_al_superar_el_limite(client):
+def _superar_limite_forgot(client, correo):
     for _ in range(3):
-        resp = client.post(
-            "/auth/forgot-password", json={"correo": "limite@test.com"}
+        assert (
+            client.post(
+                "/auth/forgot-password", json={"correo": correo}
+            ).status_code
+            == 200
         )
-        assert resp.status_code == 200
+    return client.post("/auth/forgot-password", json={"correo": correo})
 
-    resp = client.post("/auth/forgot-password", json={"correo": "limite@test.com"})
+
+def test_forgot_password_inexistente_responde_429_al_superar_el_limite(client):
+    resp = _superar_limite_forgot(client, "no-existe@test.com")
+
     assert resp.status_code == 429
     assert resp.json()["message"] == MENSAJE_DEMASIADAS_SOLICITUDES
     assert resp.json()["error"] == "Too Many Requests"
     assert int(resp.headers["Retry-After"]) > 0
+
+
+def test_forgot_password_existente_responde_429_al_superar_el_limite(client):
+    crear_usuario(client, correo="existe@test.com")
+
+    resp = _superar_limite_forgot(client, "existe@test.com")
+
+    assert resp.status_code == 429
+    assert resp.json()["message"] == MENSAJE_DEMASIADAS_SOLICITUDES
+    assert resp.json()["error"] == "Too Many Requests"
+    assert int(resp.headers["Retry-After"]) > 0
+
+
+def test_forgot_password_encola_el_correo_en_segundo_plano(
+    client, monkeypatch, servicios_externos
+):
+    from starlette.background import BackgroundTasks
+
+    crear_usuario(client, correo="segundo-plano@test.com")
+    tareas = []
+
+    def _capturar(self, func, *args, **kwargs):
+        tareas.append((func, args, kwargs))
+
+    monkeypatch.setattr(BackgroundTasks, "add_task", _capturar)
+
+    resp = client.post(
+        "/auth/forgot-password", json={"correo": "segundo-plano@test.com"}
+    )
+
+    assert resp.status_code == 200
+    assert len(tareas) == 1
+    assert tareas[0][0].__name__ == "enviar"
+    # Nada se envió de forma síncrona antes de devolver la respuesta.
+    assert servicios_externos["correos"] == []
 
 
 def test_forgot_password_guarda_solo_el_hash_y_permite_un_uso(
@@ -400,6 +523,24 @@ def test_cuerpo_demasiado_grande_responde_413(client):
     assert resp.status_code == 413
     assert resp.json()["message"] == "El cuerpo de la solicitud es demasiado grande."
     assert resp.json()["error"] == "Payload Too Large"
+
+
+def test_cuerpo_demasiado_grande_chunked_sin_content_length(client):
+    def _trozos():
+        yield b'{"correo":"a@b.com","password":"'
+        for _ in range(1025):
+            yield b"x" * 1024
+        yield b'"}'
+
+    resp = client.post(
+        "/auth/login",
+        content=_trozos(),
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert "content-length" not in {clave.lower() for clave in resp.request.headers}
+    assert resp.status_code == 413
+    assert resp.json()["message"] == "El cuerpo de la solicitud es demasiado grande."
 
 
 def test_error_500_no_filtra_datos_sensibles(client, monkeypatch, caplog):

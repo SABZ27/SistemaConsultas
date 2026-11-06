@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 JWT_SECRET_MINIMO = 32
@@ -28,6 +29,14 @@ class Settings(BaseSettings):
 
     # CORS: lista separada por comas. No se permite '*'.
     cors_origins: str = CORS_ORIGINS_EJEMPLO
+
+    # Número de proxies de confianza al final de X-Forwarded-For. 0 en local
+    # (sin proxy). Detrás de Cloudflare + Render normalmente 1.
+    trusted_proxy_hops: int = Field(default=0, ge=0)
+
+    # Diagnóstico temporal: solo cuenta entradas y presencia de cabeceras,
+    # nunca registra direcciones IP.
+    diagnostico_ip: bool = False
 
     # Administrador inicial (semilla)
     admin_correo: str = ""

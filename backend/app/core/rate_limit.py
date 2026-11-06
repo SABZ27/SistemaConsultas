@@ -7,6 +7,8 @@ autenticación sin añadir una dependencia externa (Redis, etc.).
 Todos los valores numéricos de los límites viven en este archivo.
 """
 
+import ipaddress
+import logging
 import math
 import time
 from dataclasses import dataclass, field
@@ -14,6 +16,10 @@ from threading import Lock
 from typing import Callable
 
 from fastapi import Request
+
+from app.core.config import settings
+
+logger = logging.getLogger("sistema_consultas.ip")
 
 # Tope global de claves por limitador. Evita crecimiento sin control si un
 # atacante varía correos o IPs.
@@ -269,18 +275,48 @@ def reiniciar_limitadores() -> None:
         limitador.reiniciar()
 
 
-def obtener_ip(request: Request) -> str:
-    """IP del cliente usando la última entrada de X-Forwarded-For.
+def _normalizar_ip(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    try:
+        return str(ipaddress.ip_address(valor.strip()))
+    except ValueError:
+        return None
 
-    En Render el encabezado lo añade el proxy. Se usa la última entrada para
-    que un cliente no pueda falsificar la primera y saltarse el límite. Si el
-    encabezado no está, se usa la conexión directa.
+
+def _host_directo(request: Request) -> str:
+    host = request.client.host if request.client else None
+    return _normalizar_ip(host) or "desconocida"
+
+
+def obtener_ip(request: Request) -> str:
+    """IP del cliente contando los proxies de confianza desde la derecha.
+
+    X-Forwarded-For puede venir como "cliente, edge". Con
+    TRUSTED_PROXY_HOPS=1 la entrada -(1+1) es el cliente y la última (el edge)
+    se descarta. Las entradas a la izquierda del cliente son falsificables y
+    se ignoran. Si falta el encabezado, tiene menos entradas de las esperadas
+    o la candidata no es una IP válida, se usa la conexión directa.
     """
     reenviado = request.headers.get("x-forwarded-for")
-    if reenviado:
-        partes = [parte.strip() for parte in reenviado.split(",") if parte.strip()]
-        if partes:
-            return partes[-1]
-    if request.client and request.client.host:
-        return request.client.host
-    return "desconocida"
+    partes = (
+        [parte.strip() for parte in reenviado.split(",") if parte.strip()]
+        if reenviado
+        else []
+    )
+
+    if settings.diagnostico_ip:
+        # Solo conteos y booleanos: nunca valores de IP.
+        logger.info(
+            "Diagnostico IP: x_forwarded_for_entradas=%d true_client_ip=%s",
+            len(partes),
+            "true-client-ip" in request.headers,
+        )
+
+    hops = settings.trusted_proxy_hops
+    if len(partes) >= hops + 1:
+        candidata = _normalizar_ip(partes[-(hops + 1)])
+        if candidata is not None:
+            return candidata
+
+    return _host_directo(request)
