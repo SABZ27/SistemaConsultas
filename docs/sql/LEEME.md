@@ -1,10 +1,10 @@
 # Scripts SQL para entregar a un compañero
 
-Seis scripts `.sql` (`01`–`06`) y dos documentos (`SEMBRAR_DEMO.md` y este
+Ocho scripts `.sql` (`01`–`08`) y dos documentos (`SEMBRAR_DEMO.md` y este
 `LEEME.md`). Dos motores independientes. **No contienen secretos ni correos
 personales**; los datos son de demostración salvo los festivos colombianos
-reales y los catálogos base. No se ha ejecutado nada contra Neon ni contra
-Aiven.
+reales y los catálogos base. `07` y `08` son **solo `SELECT`**. No se ha
+ejecutado nada contra Neon ni contra Aiven.
 
 ## Orden de ejecución de TODOS los scripts
 
@@ -16,15 +16,20 @@ Aiven.
 | 4 | MySQL | `04_mysql_seed.sql` | 2 proveedores reales (Nager.Date, Brevo) |
 | 5 | PostgreSQL | `05_datos_demo_postgres.sql` | Datos de demostración (20 principales / ≥10 secundarias) |
 | 6 | MySQL | `06_datos_demo_mysql.sql` | Festivos reales 2026–2027 y filas demo marcadas `[DEMO]` |
+| 7 | PostgreSQL | `07_verificar_demo.sql` | **Solo `SELECT`**: conteos, mínimos, FK huérfanas, calificaciones y domingos |
+| 8 | MySQL | `08_verificar_demo_mysql.sql` | **Solo `SELECT`**: conteos, mínimos, huérfanos y coherencia `[DEMO]` |
 
 Reglas del orden:
 
 - **Dentro de cada motor el esquema va antes que las semillas y los datos**:
-  `01 → 02 → 05` y `03 → 04 → 06`.
+  `01 → 02 → 05 → 07` y `03 → 04 → 06 → 08`. `07`/`08` van al final, cuando
+  ya existe la demo que verifican.
 - Los pares de motores son independientes entre sí: se pueden ejecutar en
   cualquier orden relativo.
 - `05` y `06` son **idempotentes** (`ON CONFLICT DO NOTHING` / `INSERT IGNORE`
   e IDs en rango alto), así que se pueden repetir sin duplicar filas.
+- `07` y `08` **no modifican nada**: ni DDL ni DML, solo consultas. Se pueden
+  ejecutar tantas veces como quiera.
 - Para la siembra **local** existe el comando idempotente
   `python scripts/sembrar_demo.py`, documentado en
   [`SEMBRAR_DEMO.md`](SEMBRAR_DEMO.md). Los `.sql` de la nube los ejecuta el
@@ -108,27 +113,65 @@ las variables; no se incluyen valores, contraseñas ni correos.
 Datos de demostración en español de Colombia para las 19 tablas: 20 registros
 en cada tabla principal y 10 o más en cada secundaria (contando las semillas
 base). Incluye los 3 roles canónicos de forma idempotente, 20 usuarios demo
-(12 estudiantes, 6 docentes, 2 administradores) con correos de dominio de
-ejemplo y **solo el hash bcrypt** de `DEMO_PASSWORD`, 20 programas, 20
-asignaturas, 20 sedes/zonas/recursos, 20 solicitudes con `numero_consulta`
-`SC-2026-9000xx` en fechas que no son domingo ni festivo colombiano de
-2026/2027, 10 calificaciones **solo sobre consultas `RESUELTAS`**, 20
-comentarios (15 del docente asignado, para que se vea
-`retroalimentacionDocente`), 20 notificaciones y 20 eventos coherentes con el
-estado, y 10 tokens de recuperación con hash. Detalle completo en
+(12 estudiantes, 6 docentes, 2 administradores) con correos en el subdominio
+reservado `@demo.ejemplo.edu.co` y **solo el hash bcrypt** de
+`DEMO_PASSWORD`, 20 programas, 20 asignaturas, 20 sedes/zonas/recursos, 20
+solicitudes con `numero_consulta` `SC-2026-9000xx` en fechas que no son
+domingo ni festivo colombiano de 2026/2027, 10 calificaciones **solo sobre
+consultas `RESUELTAS`**, 20 comentarios (15 del docente asignado, para que se
+vea `retroalimentacionDocente`), 20 notificaciones y 20 eventos coherentes
+con el estado, y 10 tokens de recuperación con hash. Los nombres de relleno
+de los 7 roles de catálogo, los 10 `modulos_sistema` y los 6
+`tipos_documento` son cargos y denominaciones realistas en español de
+Colombia; los 3 roles canónicos no se tocan y no se amplía ningún permiso
+(la matriz demo enlaza solo roles de catálogo inactivos). Detalle completo en
 [`SEMBRAR_DEMO.md`](SEMBRAR_DEMO.md).
+
+**Auditado para PostgreSQL real**: va dentro de `BEGIN` / `COMMIT`; usa
+`ON CONFLICT DO NOTHING` sin objetivo (el único que cubre a la vez la PK por
+IDs explícitos y los 16 índices únicos parciales `WHERE estado` de `01`);
+booleanos `TRUE`/`FALSE` y literales de fecha/hora válidos en PostgreSQL, sin
+sintaxis exclusiva de SQLite; y al final resincroniza **las 19 secuencias
+`SERIAL`** con `setval(pg_get_serial_sequence(tabla, 'id'), ...)`. Ejecutarlo
+dos veces no duplica filas. Las colisiones con los datos de prueba de Neon
+(1 docente, 1 estudiante, 1 programa, 1 módulo) se evitan por construcción:
+correos en subdominio reservado, identificaciones con prefijo `9` y nombres
+de programas/asignaturas con prefijo `[DEMO]`. No se consultó Neon.
 
 ## Sobre `06_datos_demo_mysql.sql` (Bloque B)
 
 38 festivos **reales** de Colombia 2026 y 2027 (19 por año, con la corrección
 Ley Emiliani), los 2 proveedores reales más 8 servicios de demostración
-inactivos y marcados, y 20 `consultas_servicio_externo` + 20
+inactivos y marcados con **nombres realistas en español de Colombia** (no
+`[DEMO] Proveedor N`), y 20 `consultas_servicio_externo` + 20
 `correos_enviados` **sintéticos marcados explícitamente con `[DEMO]`** en
 `detalle` / `respuesta_proveedor`, con `exito = 0`, `codigo_http = NULL` y
 `estado_envio = FALLIDO`. No se generaron ejecutando el flujo real en local
 (no hay proveedor ni SMTP locales; las pruebas simulan las respuestas) y
 **nunca se presentan como llamadas ni envíos reales**. Decisión documentada en
 [`SEMBRAR_DEMO.md`](SEMBRAR_DEMO.md).
+
+## Sobre `07_verificar_demo.sql` (solo `SELECT`, PostgreSQL)
+
+Verifica la demo del backend sin modificar nada:
+
+- conteo de **las 19 tablas** con columna `cumple` contra el mínimo
+  (**20** para las 12 tablas principales, **10** para las 7 secundarias);
+- las **24 FK** de `01` (filas huérfanas, todas deben dar 0);
+- que las `calificaciones_consulta` estén **solo sobre consultas `RESUELTAS`**;
+- que **ninguna solicitud esté agendada en domingo**
+  (`EXTRACT(DOW FROM fecha_consulta) = 0`, exclusivo de PostgreSQL).
+
+## Sobre `08_verificar_demo_mysql.sql` (solo `SELECT`, MySQL)
+
+Verifica la demo del servicio externo sin modificar nada:
+
+- conteo de **las 4 tablas** con columna `cumple` (**20** para `festivos`,
+  `consultas_servicio_externo` y `correos_enviados`; **10** para
+  `servicios_externos`);
+- las **5 FK** de `03` (huérfanos, todos deben dar 0);
+- coherencia `[DEMO]`: bitácoras con `exito = 0` y correos con
+  `estado_envio = FALLIDO`, ambos marcados con el prefijo `[DEMO]`.
 
 ## `03` y `04` (MySQL)
 
@@ -146,8 +189,8 @@ Se verificó con SHA-256 que origen y copia son idénticos.
 
 | Motor | Resultado |
 |---|---|
-| PostgreSQL | **No hay servidor local en `127.0.0.1:5432`** ni cliente `psql`; está prohibido conectarse a Neon. `01` se verificó de forma estática (19 `CREATE TABLE`, 19 triggers, 16 índices parciales, 24 FK). `05` se validó sobre **SQLite local** con el mismo esquema (`Base.metadata.create_all`), las semillas de `02` y `PRAGMA foreign_keys=ON`: FK sin violaciones, 20 filas por tabla principal, ≥10 por secundaria, calificaciones solo en `RESUELTAS` y ninguna fecha en domingo. |
-| MySQL | El puerto local `127.0.0.1:3307` responde. En el Bloque E la autenticación con parámetros explícitos falló (`ER_ACCESS_DENIED_ERROR`) y **no se intentaron credenciales de `.env`**, por lo que `03`/`04` se verificaron de forma estática. En el Bloque B, `06` **sí se aplicó dos veces** sobre la base local de pruebas mediante el arnés de jest: 38 festivos, 10 servicios, 20 bitácoras y 20 correos, sin duplicar en la segunda ejecución. Nunca se tocó Aiven. |
+| PostgreSQL | **No hay servidor local en `127.0.0.1:5432`** ni cliente `psql`; está prohibido conectarse a Neon. `01` se verificó de forma estática (19 `CREATE TABLE`, 19 triggers, 16 índices parciales, 24 FK). `05` se auditó de forma estática para PostgreSQL real (`BEGIN`/`COMMIT`, 19 `setval`, `ON CONFLICT` sin objetivo, sin sintaxis SQLite) y se aplicó **dos veces** sobre **SQLite local** (`Base.metadata.create_all` + semillas de `02` + `PRAGMA foreign_keys=ON`), omitiendo solo `BEGIN`/`COMMIT`/`setval`: 19 tablas, 0 FK huérfanas, 20 filas por principal y ≥10 por secundaria, sin duplicar. `07` **no se puede ejecutar tal cual en SQLite** por `EXTRACT(DOW FROM ...)`; se validó una **adaptación equivalente** (`strftime('%w', ...)`) sobre la misma base: las 19 tablas `CUMPLE`, las 24 FK con 0 huérfanas, 0 calificaciones fuera de `RESUELTAS` y 0 solicitudes en domingo. |
+| MySQL | El puerto local `127.0.0.1:3307` responde. En el Bloque E la autenticación con parámetros explícitos falló (`ER_ACCESS_DENIED_ERROR`) y **no se intentaron credenciales de `.env`**, por lo que `03`/`04` se verificaron de forma estática. `06` y `08` **sí se ejecutaron** sobre la base local de pruebas mediante el arnés de jest: `06` aplicado **dos veces** (38 festivos, 10 servicios, 20 bitácoras y 20 correos, sin duplicar) y `08` con sus 3 `SELECT` (4 tablas `CUMPLE`, 5 FK con 0 huérfanos, coherencia `[DEMO]`). Nunca se tocó Aiven. |
 
 Verificación adicional: `02` tiene 5 bloques `INSERT` y ninguno sobre
 `usuarios`; `05` contiene únicamente el hash bcrypt (nunca la contraseña en
@@ -159,17 +202,14 @@ del proyecto ejecuta los `.sql` en Neon y en Aiven y realiza el push.
 
 ## Supuestos y puntos no verificados
 
-1. **La «estructura de la clase 1» no se pudo verificar.** El documento no
-   fue entregado, así que no se comparó con la API ni se asumió su contenido.
-   La API se mantuvo como estaba: `routes → services → repositories →
-   schemas`, con cambios aditivos del Bloque C (catálogos con nombre, módulos
-   del usuario, nota y retroalimentación embebidas y `fechaActualizacion`).
-2. **«CRUD en todos los roles» se interpretó como CRUD sobre las entidades
-   propias de cada rol**, sin ampliar permisos de escritura de ningún rol
-   (decisión documentada en `docs/decisiones.md`).
-3. **La calificación la crea el estudiante dueño de la consulta resuelta**;
-   no se invirtió esa regla de negocio.
-4. Los festivos de 2027 se calcularon con las reglas de Ley Emiliani y el
-   cómputo de Pascua, tomando como referencia el fixture real de 2026 de
-   Nager.Date. No se consultó la API en la nube.
-5. Las filas `[DEMO]` de MySQL son datos de demostración, no trazas reales.
+- **(a)** La API usa `routes → services → repositories → schemas`.
+- **(b)** **«CRUD en todos los roles» se interpretó como CRUD sobre las
+  entidades propias de cada rol**, sin ampliar permisos de escritura de ningún
+  rol (decisión documentada en `docs/decisiones.md`).
+- **(c)** **La calificación la crea el estudiante dueño de la consulta
+  resuelta**; no se invirtió esa regla de negocio.
+- **(d)** Las filas de `consultas_servicio_externo` y `correos_enviados` son
+  datos `[DEMO]`, con `exito = 0` y `FALLIDO`, nunca llamadas reales.
+- **(e)** Los festivos de 2027 se calcularon con las reglas de Ley Emiliani y
+  el cómputo de Pascua, tomando como referencia el fixture real de 2026 de
+  Nager.Date. No se consultó la API en la nube.
