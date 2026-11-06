@@ -25,3 +25,5 @@ class ComentarioResponse(BaseModel):
     contenido: str
     fechaCreacion: datetime
     editado: bool = False
+    # Aditivo del Bloque C.
+    fechaActualizacion: datetime | None = None

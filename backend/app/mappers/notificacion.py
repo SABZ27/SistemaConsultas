@@ -17,4 +17,5 @@ def notificacion_response(n: Notificacion) -> NotificacionResponse:
         mensaje=n.mensaje,
         leida=n.leida,
         fechaCreacion=n.creado,
+        fechaActualizacion=n.actualizado,
     )

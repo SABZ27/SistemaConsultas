@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.exceptions.errors import BadRequestException, ResourceNotFoundException
 from app.mappers.calificacion import calificacion_response
+from app.mappers.usuario import nombre_completo
 from app.models.calificacion_consulta import CalificacionConsulta
 from app.models.enums import EstadoSolicitud
 from app.models.usuario import Usuario
@@ -76,7 +77,10 @@ class CalificacionConsultaService:
             raise ResourceNotFoundException("Docente no encontrado.")
         promedio, total = self.repo.promedio_by_docente_id(docente.id)
         return PromedioCalificacionesResponse(
-            docenteId=docente.id, promedio=round(promedio, 2), total=total
+            docenteId=docente.id,
+            promedio=round(promedio, 2),
+            total=total,
+            nombreDocente=nombre_completo(docente),
         )
 
     def _tiene_gestion(self, usuario: Usuario) -> bool:

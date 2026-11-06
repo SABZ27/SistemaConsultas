@@ -31,6 +31,7 @@ def usuario_response(
         tipoDocumentoNombre=tipo_documento.nombre if tipo_documento else None,
         estado=u.estado,
         fechaCreacion=u.creado,
+        fechaActualizacion=u.actualizado,
     )
 
 

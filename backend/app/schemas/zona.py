@@ -20,3 +20,5 @@ class ZonaResponse(BaseModel):
     sedeId: int
     nombre: str
     estado: bool
+    # Aditivo del Bloque C: nombre legible para los select del frontend.
+    nombreSede: str | None = None

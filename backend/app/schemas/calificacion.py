@@ -18,9 +18,16 @@ class CalificacionResponse(BaseModel):
     docenteId: int
     estudianteId: int
     fechaCreacion: datetime
+    # Aditivos del Bloque C: nombres legibles (no identificacion ni correo,
+    # que siguen enmascarados por el Bloque G) y fecha de actualizacion.
+    numeroConsulta: str | None = None
+    nombreEstudiante: str | None = None
+    nombreDocente: str | None = None
+    fechaActualizacion: datetime | None = None
 
 
 class PromedioCalificacionesResponse(BaseModel):
     docenteId: int
     promedio: float
     total: int
+    nombreDocente: str | None = None

@@ -16,6 +16,7 @@ def _response(zona: Zona) -> ZonaResponse:
         sedeId=zona.sede_id,
         nombre=zona.nombre,
         estado=zona.estado,
+        nombreSede=zona.sede.nombre if zona.sede is not None else None,
     )
 
 

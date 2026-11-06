@@ -29,3 +29,6 @@ class RecursoFisicoResponse(BaseModel):
     tipo: TipoRecursoFisico
     ubicacion: str
     estado: bool
+    # Aditivos del Bloque C: nombres legibles para los select del frontend.
+    nombreSede: str | None = None
+    nombreZona: str | None = None

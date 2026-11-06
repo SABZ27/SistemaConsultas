@@ -15,7 +15,16 @@ from app.db.session import SessionLocal, engine
 from app.main import app
 from app.models import Base
 from app.models.usuario import Usuario
-from tests.helpers import auth, crear_admin, crear_modulo, crear_solicitud, crear_usuario
+from tests.helpers import (
+    auth,
+    crear_admin,
+    crear_modulo,
+    crear_recurso,
+    crear_sede,
+    crear_solicitud,
+    crear_usuario,
+    crear_zona,
+)
 
 RUTAS_DOC = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
 SIN_TOKEN = "SIN_TOKEN"
@@ -55,6 +64,7 @@ _registrar(
     TODOS,
     [
         ("GET", "/auth/me"),
+        ("GET", "/auth/me/modulos"),
         ("POST", "/auth/cambiar-password"),
         ("GET", "/docentes/{id_docente}/calificaciones/promedio"),
         ("POST", "/comentarios"),
@@ -589,3 +599,73 @@ def test_listado_docentes_no_expone_identificacion_ni_correo(client, identidades
     ).json()
     assert cuerpo
     assert all(set(u) == {"id", "nombre", "apellido"} for u in cuerpo)
+
+
+# --- Bloque C · C1: módulos del usuario autenticado ------------------------
+def test_modulos_del_usuario_por_rol(client, identidades):
+    esperados = {
+        "ESTUDIANTE": {"MIS_SOLICITUDES", "PERFIL", "NOTIFICACIONES", "CALIFICACIONES"},
+        "DOCENTE": {"ATENCION_SOLICITUDES", "DISPONIBILIDAD_DOCENTE", "PERFIL"},
+        "ADMINISTRADOR": {"GESTION_SOLICITUDES", "USUARIOS", "ROLES_PERMISOS", "INFRAESTRUCTURA"},
+    }
+    for rol, nombres in esperados.items():
+        resp = client.get("/auth/me/modulos", headers=identidades[rol]["headers"])
+        assert resp.status_code == 200, resp.text
+        obtenidos = {m["nombre"] for m in resp.json()}
+        assert nombres <= obtenidos, f"{rol}: {obtenidos}"
+
+    estudiante = {
+        m["nombre"]
+        for m in client.get(
+            "/auth/me/modulos", headers=identidades["ESTUDIANTE"]["headers"]
+        ).json()
+    }
+    docente = {
+        m["nombre"]
+        for m in client.get(
+            "/auth/me/modulos", headers=identidades["DOCENTE"]["headers"]
+        ).json()
+    }
+    assert "GESTION_SOLICITUDES" not in estudiante
+    assert "MIS_SOLICITUDES" not in docente
+
+
+def test_modulos_del_usuario_salen_de_la_tabla(client, identidades):
+    """Sin valores fijos: la respuesta coincide con modulos_x_rol activo."""
+    from app.repositories.modulo_x_rol import ModuloXRolRepository
+
+    with SessionLocal() as db:
+        usuario = db.query(Usuario).filter_by(correo="bloqueD.est@test.com").one()
+        de_tabla = {
+            m.nombre
+            for m in ModuloXRolRepository(db).activos_por_rol(usuario.rol_id)
+        }
+    respuesta = client.get(
+        "/auth/me/modulos", headers=identidades["ESTUDIANTE"]["headers"]
+    )
+    assert {m["nombre"] for m in respuesta.json()} == de_tabla
+
+
+def test_modulos_del_usuario_sin_token(client):
+    assert client.get("/auth/me/modulos").status_code == 401
+
+
+# --- Bloque C · C2: catálogos con nombres legibles -------------------------
+def test_catalogos_devuelven_nombres_legibles(client, identidades):
+    admin = identidades["ADMINISTRADOR"]
+    sede = crear_sede(client, admin["token"], nombre="Sede Taller C2")
+    zona = crear_zona(client, admin["token"], sede["id"], nombre="Bloque Taller C2")
+    recurso = crear_recurso(
+        client, admin["token"], sede["id"], zona["id"], nombre="Salón Taller C2"
+    )
+
+    z = client.get(f"/zonas/{zona['id']}", headers=admin["headers"]).json()
+    assert z["nombreSede"] == "Sede Taller C2"
+    assert z["sedeId"] == sede["id"]  # campo original conservado
+
+    r = client.get(
+        f"/recursos-fisicos/{recurso['id']}", headers=admin["headers"]
+    ).json()
+    assert r["nombreSede"] == "Sede Taller C2"
+    assert r["nombreZona"] == "Bloque Taller C2"
+    assert r["ubicacion"]  # campo original conservado

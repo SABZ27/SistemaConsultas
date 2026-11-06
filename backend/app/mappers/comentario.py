@@ -13,4 +13,5 @@ def comentario_response(c: Comentario) -> ComentarioResponse:
         contenido=c.contenido,
         fechaCreacion=c.creado,
         editado=c.editado,
+        fechaActualizacion=c.actualizado,
     )

@@ -48,6 +48,14 @@ class CambiarEstadoSolicitudRequest(BaseModel):
     motivo: str | None = None
 
 
+class CalificacionResumen(BaseModel):
+    """Nota puesta por el estudiante, embebida en la consulta (Bloque C)."""
+
+    puntaje: int
+    comentario: str | None
+    fecha: datetime
+
+
 class SolicitudConsultaResponse(BaseModel):
     id: int
     numeroConsulta: str
@@ -69,6 +77,9 @@ class SolicitudConsultaResponse(BaseModel):
     nombrePrograma: str | None = "Sin programa"
     recursoFisicoId: int | None = None
     nombreRecursoFisico: str | None = "Sin asignar"
+    # Aditivos del Bloque C: no sustituyen ningún campo existente.
+    calificacion: CalificacionResumen | None = None
+    fechaActualizacion: datetime | None = None
 
     @field_serializer("horaConsulta")
     def serializar_hora(self, valor: time, _info) -> str:

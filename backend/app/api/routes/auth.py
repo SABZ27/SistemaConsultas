@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.rate_limit import obtener_ip
 from app.db.session import get_db
+from app.repositories.modulo_x_rol import ModuloXRolRepository
 from app.schemas.auth import (
     CambiarPasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     MeResponse,
+    ModuloInfo,
     ResetPasswordRequest,
 )
 from app.schemas.usuario import RegistroUsuarioRequest
@@ -25,6 +27,23 @@ def mi_perfil(
     usuario=Depends(get_current_user),
 ) -> MeResponse:
     return AuthService(db).mi_perfil(usuario)
+
+
+@router.get("/me/modulos", response_model=list[ModuloInfo])
+def mis_modulos(
+    db: Session = Depends(get_db),
+    usuario=Depends(get_current_user),
+) -> list[ModuloInfo]:
+    """Módulos del usuario autenticado, leídos de modulos_x_rol.
+
+    No hay valores fijos: se consulta la tabla en cada petición, igual que
+    /auth/me y que la autorización por módulos (requiere_modulo).
+    """
+    modulos = ModuloXRolRepository(db).activos_por_rol(usuario.rol_id)
+    return [
+        ModuloInfo(nombre=m.nombre, ruta=m.ruta, icono=m.icono)
+        for m in modulos
+    ]
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)

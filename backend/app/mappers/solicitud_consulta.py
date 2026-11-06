@@ -2,7 +2,28 @@ from app.models.solicitud_consulta import SolicitudConsulta
 from app.models.usuario import Usuario
 from app.models.enums import Rol
 from app.mappers.usuario import nombre_completo
-from app.schemas.solicitud import SolicitudConsultaResponse
+from app.schemas.solicitud import CalificacionResumen, SolicitudConsultaResponse
+
+
+def _calificacion_resumen(s: SolicitudConsulta) -> CalificacionResumen | None:
+    """Nota activa de la consulta, si existe.
+
+    El backref ``calificacion`` de CalificacionConsulta.solicitud puede
+    materializarse como lista o como objeto según la configuración ORM; se
+    normaliza y se respeta la baja lógica (``estado``).
+    """
+    relacion = getattr(s, "calificacion", None)
+    if relacion is None:
+        return None
+    candidatos = relacion if isinstance(relacion, (list, tuple)) else [relacion]
+    for c in candidatos:
+        if getattr(c, "estado", False):
+            return CalificacionResumen(
+                puntaje=c.puntaje,
+                comentario=c.comentario,
+                fecha=c.creado,
+            )
+    return None
 
 
 def solicitud_consulta_response(
@@ -49,4 +70,6 @@ def solicitud_consulta_response(
         nombrePrograma=programa.nombre if programa else "Sin programa",
         recursoFisicoId=s.recurso_fisico_id,
         nombreRecursoFisico=s.recurso_fisico_nombre or "Sin asignar",
+        calificacion=_calificacion_resumen(s),
+        fechaActualizacion=s.actualizado,
     )

@@ -30,6 +30,8 @@ def _response(recurso: RecursoFisico) -> RecursoFisicoResponse:
         tipo=recurso.tipo,
         ubicacion=ubicacion_recurso(recurso),
         estado=recurso.estado,
+        nombreSede=recurso.sede.nombre if recurso.sede is not None else None,
+        nombreZona=recurso.zona.nombre if recurso.zona is not None else None,
     )
 
 

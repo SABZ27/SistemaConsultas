@@ -57,6 +57,8 @@ class UsuarioResponse(BaseModel):
     tipoDocumentoNombre: str | None
     estado: bool
     fechaCreacion: datetime
+    # Aditivo del Bloque C: fecha de la última modificación.
+    fechaActualizacion: datetime | None = None
 
 
 class DocenteResumen(BaseModel):

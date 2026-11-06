@@ -27,6 +27,8 @@ class NotificacionResponse(BaseModel):
     mensaje: str
     leida: bool
     fechaCreacion: datetime
+    # Aditivo del Bloque C.
+    fechaActualizacion: datetime | None = None
 
 
 class MarcarNotificacionLeidaRequest(BaseModel):
