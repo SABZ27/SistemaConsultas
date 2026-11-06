@@ -9,6 +9,13 @@ aplica también ``docs/sql/06_datos_demo_mysql.sql``. Ambos .sql son
 idempotentes (``ON CONFLICT DO NOTHING`` / ``INSERT IGNORE``), por lo que se
 puede ejecutar las veces que haga falta sin duplicar filas.
 
+``05`` está auditado para PostgreSQL real: lleva ``BEGIN``/``COMMIT`` y 19
+``SELECT setval(pg_get_serial_sequence(...))``. En motores que no son
+PostgreSQL (por defecto, SQLite local) el script omite esas sentencias:
+SQLAlchemy ya maneja la transacción con ``motor.begin()`` y SQLite no tiene
+``pg_get_serial_sequence`` ni secuencias SERIAL. El ``.sql`` completo se
+ejecuta tal cual en Neon con ``psql``.
+
 Variables de entorno (OPCIONALES). El script **no lee ningún archivo .env**,
 no imprime contraseñas ni cadenas de conexión y no se conecta a Neon ni a
 Aiven:
@@ -100,6 +107,14 @@ def _sembrar_backend() -> None:
     if motor.dialect.name == "sqlite":
         Base.metadata.create_all(bind=motor)
     sentencias = _sentencias(SQL_DIR / "05_datos_demo_postgres.sql")
+    es_postgres = motor.dialect.name == "postgresql"
+    # BEGIN/COMMIT los gestiona SQLAlchemy con motor.begin(); los setval son
+    # exclusivos de PostgreSQL (pg_get_serial_sequence + secuencias SERIAL).
+    sentencias = [
+        s for s in sentencias
+        if s.strip().upper() not in ("BEGIN", "COMMIT")
+        and (es_postgres or "pg_get_serial_sequence" not in s)
+    ]
     with motor.begin() as conexion:
         for sentencia in sentencias:
             conexion.exec_driver_sql(sentencia)

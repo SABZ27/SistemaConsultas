@@ -1,48 +1,73 @@
 -- ============================================================================
 -- 05_datos_demo_postgres.sql — datos de demostración (Fase 6 · Bloque B)
 -- ============================================================================
--- PostgreSQL 15+ (Neon). Ejecutar DESPUES de 01_postgres_schema.sql y
--- 02_postgres_seed.sql. Es IDEMPOTENTE: ON CONFLICT DO NOTHING e IDs fijos en
--- rango alto, para no colisionar con las semillas base.
--- Solo datos de demostración: correos de dominio de ejemplo, sin datos reales.
--- La contraseña de los usuarios demo NO aparece aqui: solo su hash bcrypt.
--- Se genera a partir de DEMO_PASSWORD (o el valor de demostración por defecto).
+-- AUDITADO para PostgreSQL 15+ REAL (Neon). Ejecutar DESPUES de
+-- 01_postgres_schema.sql y 02_postgres_seed.sql. NO es un script de SQLite.
+--
+-- * Transaccion atomica: BEGIN ... COMMIT. Si algo falla no queda siembra
+--   parcial.
+-- * Se insertan IDs explicitos en rango alto; al FINAL se resincronizan las
+--   19 secuencias SERIAL con setval(pg_get_serial_sequence(tabla,'id'), ...)
+--   para que los proximos INSERT de la API no choquen con la PK.
+-- * Sin sintaxis exclusiva de SQLite: sin INSERT OR IGNORE, sin AUTOINCREMENT,
+--   sin PRAGMA, sin strftime(). Booleanos TRUE/FALSE y literales
+--   'YYYY-MM-DD', 'HH:MM', 'YYYY-MM-DD HH:MM:SS' que PostgreSQL convierte
+--   implicitamente al tipo DATE / TIME / TIMESTAMP WITHOUT TIME ZONE de cada
+--   columna. Subconsultas escalares y CURRENT_TIMESTAMP son PostgreSQL puro.
+-- * ON CONFLICT DO NOTHING SIN objetivo: es el unico que cubre a la vez la PK
+--   (IDs explicitos), los UNIQUE simples y los 16 indices unicos PARCIALES
+--   WHERE estado de 01 (ver comentario por tabla). Un objetivo explicito
+--   "ON CONFLICT (nombre) WHERE estado" NO cubre las filas inactivas ni los
+--   conflictos de PK y romperia la idempotencia en la segunda ejecucion.
+-- * Idempotente: ejecutarlo dos veces no duplica filas (todas las filas
+--   chocan con su PK) y deja las secuencias en el mismo valor.
+-- * Colisiones con datos de prueba de Neon evitadas POR CONSTRUCCION: correos
+--   en subdominio reservado @demo.ejemplo.edu.co, identificaciones con prefijo
+--   9 (rango 90000000xx) y nombres de programas/asignaturas con prefijo
+--   [DEMO]. No se consulto Neon (esta prohibido en este trabajo).
+-- * Solo datos de demostracion. La contrasena de los usuarios demo NO aparece:
+--   unicamente su hash bcrypt, generado desde DEMO_PASSWORD.
 -- ============================================================================
+
+BEGIN;
 
 
 -- Roles: 3 canonicos (coinciden con 02) + 7 entradas de catalogo de
 -- demostracion inactivas. Idempotente: si 02 ya los inserto, se omiten.
 
+-- Conflictos cubiertos (01): PK(id) y uq_roles_nombre_estado (parcial WHERE estado).
 INSERT INTO roles (id, nombre, descripcion, estado, creado, actualizado) VALUES
 (1900, 'ADMINISTRADOR', NULL, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1901, 'DOCENTE', NULL, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1902, 'ESTUDIANTE', NULL, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1000, 'Decanatura', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1001, 'Coordinación Académica', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1002, 'Secretaría General', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1003, 'Monitoría', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1004, 'Biblioteca', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1005, 'Bienestar Universitario', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1006, 'Evaluación Docente', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+(1000, 'Decano de Facultad', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1001, 'Coordinador de Programa Académico', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1002, 'Secretario Académico', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1003, 'Monitor Académico', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1004, 'Coordinador de Biblioteca', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1005, 'Coordinador de Bienestar Universitario', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1006, 'Coordinador de Evaluación Docente', NULL, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Modulos del sistema de demostracion (10).
 
+-- Conflictos cubiertos (01): PK(id) y uq_modulos_sistema_nombre_estado (parcial WHERE estado).
 INSERT INTO modulos_sistema (id, nombre, descripcion, ruta, icono, estado, creado, actualizado) VALUES
-(1100, 'Reportes Académicos', 'Reportes de desempeño', '/reportes', 'assessment', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1101, 'Horarios', 'Consulta de horarios', '/horarios', 'schedule', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1102, 'Matrícula', 'Gestión de matrícula', '/matricula', 'how_to_reg', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1103, 'Biblioteca', 'Catálogo bibliográfico', '/biblioteca', 'local_library', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1104, 'Bienestar', 'Programas de bienestar', '/bienestar', 'volunteer_activism', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1105, 'Evaluación Docente', 'Encuestas de evaluación', '/evaluacion', 'fact_check', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1106, 'Plan de Estudio', 'Malla curricular', '/plan-estudio', 'account_tree', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1107, 'Seguimiento', 'Seguimiento académico', '/seguimiento', 'trending_up', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1108, 'Encuestas', 'Encuestas institucionales', '/encuestas', 'poll', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1109, 'Notificaciones', 'Avisos institucionales', '/avisos', 'campaign', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+(1100, 'Reportes de Desempeño Académico', 'Indicadores de rendimiento por programa', '/reportes-desempeno', 'assessment', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1101, 'Consulta de Horarios', 'Horarios de clase y asesorías', '/consulta-horarios', 'schedule', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1102, 'Gestión de Matrícula', 'Matrícula académica y financiera', '/gestion-matricula', 'how_to_reg', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1103, 'Catálogo Bibliográfico', 'Consulta del catálogo de la biblioteca', '/catalogo-bibliografico', 'local_library', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1104, 'Programas de Bienestar', 'Oferta de bienestar universitario', '/programas-bienestar', 'volunteer_activism', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1105, 'Encuesta de Evaluación Docente', 'Evaluación del desempeño docente', '/encuesta-evaluacion', 'fact_check', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1106, 'Malla Curricular', 'Consulta de planes de estudio', '/malla-curricular', 'account_tree', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1107, 'Seguimiento Académico', 'Seguimiento al rendimiento estudiantil', '/seguimiento-academico', 'trending_up', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1108, 'Encuestas Institucionales', 'Encuestas de percepción institucional', '/encuestas-institucionales', 'poll', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1109, 'Tablero de Indicadores', 'Indicadores de gestión para la dirección', '/tablero-indicadores', 'campaign', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Matriz modulo x rol de demostracion (10), solo roles de catalogo.
 
+-- Conflictos cubiertos (01): PK(id) y uq_modulos_x_rol_rol_modulo (parcial WHERE estado).
 INSERT INTO modulos_x_rol (id, rol_id, modulo_id, estado, creado, actualizado) VALUES
 (1200, 1000, 1100, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1201, 1001, 1101, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -58,17 +83,19 @@ ON CONFLICT DO NOTHING;
 
 -- Tipos de documento de demostracion (6).
 
+-- Conflictos cubiertos (01): PK(id), uq_tipos_documento_nombre_estado y uq_tipos_documento_sigla_estado (parciales WHERE estado).
 INSERT INTO tipos_documento (id, nombre, sigla, estado, creado, actualizado) VALUES
 (1300, 'Registro Civil de Nacimiento', 'RC', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1301, 'Cédula Digital', 'CD', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1302, 'Documento Nacional de Identidad', 'DNI', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1303, 'Pasaporte Diplomático', 'PD', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1304, 'Permiso Especial de Permanencia', 'PEP', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1305, 'Carné de Extranjería', 'CEX', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+(1301, 'Cédula de Ciudadanía Digital', 'CCD', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1302, 'Pasaporte Diplomático', 'PD', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1303, 'Permiso Especial de Permanencia', 'PEP', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1304, 'Salvoconducto de Permanencia', 'SP', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1305, 'Visa de Residencia Estudiantil', 'VRE', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Periodos academicos (10); 2026-1 coincide con la semilla base.
 
+-- Conflictos cubiertos (01): PK(id) y uq_periodos_academicos_nombre_estado (parcial WHERE estado).
 INSERT INTO periodos_academicos (id, nombre, fecha_inicio, fecha_fin, estado, creado, actualizado) VALUES
 (1400, '2023-1', '2023-01-01', '2023-06-30', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1401, '2023-2', '2023-07-01', '2023-12-31', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -83,82 +110,87 @@ INSERT INTO periodos_academicos (id, nombre, fecha_inicio, fecha_fin, estado, cr
 ON CONFLICT DO NOTHING;
 
 -- Programas academicos (20), nombres reales de educación superior en Colombia.
+-- Prefijo [DEMO]: evita colisionar con el programa de prueba de Neon.
 
+-- Conflictos cubiertos (01): PK(id) y uq_programas_academicos_nombre_estado (parcial WHERE estado).
 INSERT INTO programas_academicos (id, nombre, estado, creado, actualizado) VALUES
-(1500, 'Ingeniería de Sistemas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1501, 'Ingeniería Industrial', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1502, 'Administración de Empresas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1503, 'Contaduría Pública', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1504, 'Derecho', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1505, 'Medicina', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1506, 'Enfermería', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1507, 'Psicología', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1508, 'Arquitectura', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1509, 'Ingeniería Civil', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1510, 'Economía', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1511, 'Comunicación Social', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1512, 'Diseño Gráfico', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1513, 'Licenciatura en Matemáticas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1514, 'Licenciatura en Lenguas Modernas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1515, 'Trabajo Social', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1516, 'Biología', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1517, 'Química', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1518, 'Física', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1519, 'Estadística', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+(1500, '[DEMO] Ingeniería de Sistemas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1501, '[DEMO] Ingeniería Industrial', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1502, '[DEMO] Administración de Empresas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1503, '[DEMO] Contaduría Pública', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1504, '[DEMO] Derecho', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1505, '[DEMO] Medicina', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1506, '[DEMO] Enfermería', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1507, '[DEMO] Psicología', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1508, '[DEMO] Arquitectura', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1509, '[DEMO] Ingeniería Civil', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1510, '[DEMO] Economía', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1511, '[DEMO] Comunicación Social', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1512, '[DEMO] Diseño Gráfico', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1513, '[DEMO] Licenciatura en Matemáticas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1514, '[DEMO] Licenciatura en Lenguas Modernas', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1515, '[DEMO] Trabajo Social', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1516, '[DEMO] Biología', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1517, '[DEMO] Química', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1518, '[DEMO] Física', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1519, '[DEMO] Estadística', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
--- Asignaturas (20) con descripcion.
+-- Asignaturas (20) con descripcion. Prefijo [DEMO] por el mismo motivo.
 
+-- Conflictos cubiertos (01): PK(id) y uq_modulos_nombre_estado (parcial WHERE estado).
 INSERT INTO modulos (id, nombre, descripcion, estado, creado, actualizado) VALUES
-(1600, 'Cálculo Diferencial', 'Límites, derivadas y aplicaciones en funciones de una variable.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1601, 'Álgebra Lineal', 'Espacios vectoriales, matrices, determinantes y transformaciones lineales.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1602, 'Programación I', 'Algoritmos, estructuras de control y fundamentos de Python.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1603, 'Estructuras de Datos', 'Listas, pilas, colas, árboles y grafos con análisis de complejidad.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1604, 'Bases de Datos', 'Modelo relacional, normalización y consultas SQL.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1605, 'Ingeniería de Software', 'Ciclo de vida, requisitos, diseño y pruebas de software.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1606, 'Redes de Computadores', 'Modelo TCP/IP, direccionamiento y protocolos de aplicación.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1607, 'Sistemas Operativos', 'Procesos, concurrencia, memoria y sistemas de archivos.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1608, 'Algoritmos y Complejidad', 'Diseño de algoritmos, recursión y análisis asintótico.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1609, 'Matemáticas Discretas', 'Lógica proposicional, conjuntos, combinatoria y teoría de grafos.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1610, 'Física Mecánica', 'Cinemática, dinámica, trabajo, energía y momentum.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1611, 'Química General', 'Estructura atómica, enlaces, estequiometría y reacciones.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1612, 'Estadística Descriptiva', 'Distribuciones de frecuencia, medidas de tendencia y dispersión.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1613, 'Microeconomía', 'Oferta, demanda, elasticidad y equilibrio del consumidor.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1614, 'Contabilidad Financiera', 'Estados financieros, partida doble y normas contables.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1615, 'Derecho Constitucional', 'Constitución, derechos fundamentales y organización del Estado.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1616, 'Anatomía Humana', 'Sistemas del cuerpo humano y terminología anatómica.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1617, 'Metodología de la Investigación', 'Planteamiento del problema, marco teórico y diseño de investigación.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1618, 'Ética Profesional', 'Responsabilidad profesional y códigos de ética en el ejercicio.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1619, 'Gestión de Proyectos', 'Planificación, cronogramas, riesgos y seguimiento de proyectos.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+(1600, '[DEMO] Cálculo Diferencial', 'Límites, derivadas y aplicaciones en funciones de una variable.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1601, '[DEMO] Álgebra Lineal', 'Espacios vectoriales, matrices, determinantes y transformaciones lineales.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1602, '[DEMO] Programación I', 'Algoritmos, estructuras de control y fundamentos de Python.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1603, '[DEMO] Estructuras de Datos', 'Listas, pilas, colas, árboles y grafos con análisis de complejidad.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1604, '[DEMO] Bases de Datos', 'Modelo relacional, normalización y consultas SQL.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1605, '[DEMO] Ingeniería de Software', 'Ciclo de vida, requisitos, diseño y pruebas de software.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1606, '[DEMO] Redes de Computadores', 'Modelo TCP/IP, direccionamiento y protocolos de aplicación.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1607, '[DEMO] Sistemas Operativos', 'Procesos, concurrencia, memoria y sistemas de archivos.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1608, '[DEMO] Algoritmos y Complejidad', 'Diseño de algoritmos, recursión y análisis asintótico.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1609, '[DEMO] Matemáticas Discretas', 'Lógica proposicional, conjuntos, combinatoria y teoría de grafos.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1610, '[DEMO] Física Mecánica', 'Cinemática, dinámica, trabajo, energía y momentum.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1611, '[DEMO] Química General', 'Estructura atómica, enlaces, estequiometría y reacciones.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1612, '[DEMO] Estadística Descriptiva', 'Distribuciones de frecuencia, medidas de tendencia y dispersión.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1613, '[DEMO] Microeconomía', 'Oferta, demanda, elasticidad y equilibrio del consumidor.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1614, '[DEMO] Contabilidad Financiera', 'Estados financieros, partida doble y normas contables.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1615, '[DEMO] Derecho Constitucional', 'Constitución, derechos fundamentales y organización del Estado.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1616, '[DEMO] Anatomía Humana', 'Sistemas del cuerpo humano y terminología anatómica.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1617, '[DEMO] Metodología de la Investigación', 'Planteamiento del problema, marco teórico y diseño de investigación.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1618, '[DEMO] Ética Profesional', 'Responsabilidad profesional y códigos de ética en el ejercicio.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1619, '[DEMO] Gestión de Proyectos', 'Planificación, cronogramas, riesgos y seguimiento de proyectos.', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Usuarios de demostracion (20): 12 estudiantes, 6 docentes, 2 administradores.
 
+-- Conflictos cubiertos (01): PK(id), uq_usuarios_correo_estado y uq_usuarios_identificacion_estado (parciales WHERE estado).
 INSERT INTO usuarios (id, identificacion, nombre, apellido, correo, password, rol_id, programa_id, tipo_documento_id, estado, creado, actualizado) VALUES
-(1700, '1000000001', 'Juan Sebastián', 'Rodríguez', 'estudiante01@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1500, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1701, '1000000002', 'María Fernanda', 'Gómez', 'estudiante02@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1501, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1702, '1000000003', 'Andrés Felipe', 'Martínez', 'estudiante03@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1502, 1302, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1703, '1000000004', 'Laura Valentina', 'Hernández', 'estudiante04@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1503, 1303, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1704, '1000000005', 'Santiago', 'García', 'estudiante05@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1504, 1304, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1705, '1000000006', 'Daniela', 'López', 'estudiante06@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1505, 1305, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1706, '1000000007', 'Carlos Andrés', 'Pérez', 'estudiante07@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1506, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1707, '1000000008', 'Camila', 'Sánchez', 'estudiante08@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1507, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1708, '1000000009', 'Juan David', 'Ramírez', 'estudiante09@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1508, 1302, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1709, '1000000010', 'Valentina', 'Torres', 'estudiante10@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1509, 1303, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1710, '1000000011', 'Nicolás', 'Díaz', 'estudiante11@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1510, 1304, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1711, '1000000012', 'Isabella', 'Castro', 'estudiante12@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1511, 1305, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1712, '1000000013', 'Mateo', 'Moreno', 'docente13@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1512, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1713, '1000000014', 'Sofía', 'Ríos', 'docente14@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1513, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1714, '1000000015', 'Alejandro', 'Vargas', 'docente15@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1514, 1302, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1715, '1000000016', 'Mariana', 'Mendoza', 'docente16@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1515, 1303, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1716, '1000000017', 'Emilio', 'Ospina', 'docente17@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1516, 1304, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1717, '1000000018', 'Gabriela', 'Restrepo', 'docente18@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1517, 1305, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1718, '1000000019', 'Tomás', 'Cárdenas', 'administrador19@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ADMINISTRADOR' AND estado = TRUE LIMIT 1), 1518, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(1719, '1000000020', 'Lucía', 'Valencia', 'administrador20@ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ADMINISTRADOR' AND estado = TRUE LIMIT 1), 1519, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+(1700, '9000000001', 'Juan Sebastián', 'Rodríguez', 'estudiante01@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1500, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1701, '9000000002', 'María Fernanda', 'Gómez', 'estudiante02@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1501, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1702, '9000000003', 'Andrés Felipe', 'Martínez', 'estudiante03@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1502, 1302, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1703, '9000000004', 'Laura Valentina', 'Hernández', 'estudiante04@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1503, 1303, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1704, '9000000005', 'Santiago', 'García', 'estudiante05@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1504, 1304, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1705, '9000000006', 'Daniela', 'López', 'estudiante06@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1505, 1305, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1706, '9000000007', 'Carlos Andrés', 'Pérez', 'estudiante07@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1506, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1707, '9000000008', 'Camila', 'Sánchez', 'estudiante08@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1507, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1708, '9000000009', 'Juan David', 'Ramírez', 'estudiante09@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1508, 1302, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1709, '9000000010', 'Valentina', 'Torres', 'estudiante10@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1509, 1303, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1710, '9000000011', 'Nicolás', 'Díaz', 'estudiante11@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1510, 1304, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1711, '9000000012', 'Isabella', 'Castro', 'estudiante12@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ESTUDIANTE' AND estado = TRUE LIMIT 1), 1511, 1305, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1712, '9000000013', 'Mateo', 'Moreno', 'docente13@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1512, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1713, '9000000014', 'Sofía', 'Ríos', 'docente14@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1513, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1714, '9000000015', 'Alejandro', 'Vargas', 'docente15@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1514, 1302, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1715, '9000000016', 'Mariana', 'Mendoza', 'docente16@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1515, 1303, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1716, '9000000017', 'Emilio', 'Ospina', 'docente17@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1516, 1304, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1717, '9000000018', 'Gabriela', 'Restrepo', 'docente18@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'DOCENTE' AND estado = TRUE LIMIT 1), 1517, 1305, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1718, '9000000019', 'Tomás', 'Cárdenas', 'administrador19@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ADMINISTRADOR' AND estado = TRUE LIMIT 1), 1518, 1300, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(1719, '9000000020', 'Lucía', 'Valencia', 'administrador20@demo.ejemplo.edu.co', '$2b$12$mlqlHwS3WdJbglSSKc4fYOw.YJ1If4AuGU.hw4UIw6YdUjk9x2/yi', (SELECT id FROM roles WHERE nombre = 'ADMINISTRADOR' AND estado = TRUE LIMIT 1), 1519, 1301, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
 
 -- Sedes (20).
 
+-- Conflictos cubiertos (01): PK(id) y uq_sedes_nombre_estado (parcial WHERE estado).
 INSERT INTO sedes (id, nombre, tipo_estructura, estado, creado, actualizado) VALUES
 (1800, 'Sede Central', 'BLOQUES', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1801, 'Sede Norte', 'BLOQUES', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -184,6 +216,7 @@ ON CONFLICT DO NOTHING;
 
 -- Zonas (20), una por sede.
 
+-- Conflictos cubiertos (01): PK(id) y uq_zonas_sede_nombre_estado (parcial WHERE estado).
 INSERT INTO zonas (id, sede_id, nombre, estado, creado, actualizado) VALUES
 (1900, 1800, 'Bloque Académico A', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (1901, 1801, 'Bloque de Laboratorios', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -209,6 +242,7 @@ ON CONFLICT DO NOTHING;
 
 -- Recursos fisicos (20) con sede y zona coherentes.
 
+-- Conflictos cubiertos (01): PK(id) y uq_recursos_sede_zona_nombre_estado (parcial WHERE estado).
 INSERT INTO recursos_fisicos (id, sede_id, zona_id, nombre, tipo, estado, creado, actualizado) VALUES
 (2000, 1800, 1900, 'Salón 101', 'SALON', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (2001, 1801, 1901, 'Laboratorio de Cómputo 1', 'LABORATORIO', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -234,6 +268,7 @@ ON CONFLICT DO NOTHING;
 
 -- Asignacion docente-asignatura (20 pares distintos).
 
+-- Conflictos cubiertos (01): PK(id) y uq_docentes_modulos_docente_modulo (parcial WHERE estado).
 INSERT INTO docentes_modulos (id, docente_id, modulo_id, estado, creado, actualizado) VALUES
 (2100, 1712, 1600, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (2101, 1713, 1607, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -259,6 +294,7 @@ ON CONFLICT DO NOTHING;
 
 -- Disponibilidad horaria (20), sin solapes por docente/dia/hora.
 
+-- Conflictos cubiertos (01): PK(id) y uq_disponibilidad_docente_docente_dia_hora (parcial WHERE estado).
 INSERT INTO disponibilidad_docente (id, docente_id, dia_semana, hora_inicio, hora_fin, estado, creado, actualizado) VALUES
 (2200, 1712, 1, '07:00', '09:00', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (2201, 1713, 2, '07:00', '09:00', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -284,6 +320,7 @@ ON CONFLICT DO NOTHING;
 
 -- Solicitudes (20): fechas ni domingo ni festivo colombiano de 2026.
 
+-- Conflictos cubiertos (01): PK(id) y UNIQUE(numero_consulta).
 INSERT INTO solicitudes_consultas (id, numero_consulta, estado_consulta, prioridad, asunto, descripcion, fecha_consulta, hora_consulta, estudiante_id, docente_id, modulo_id, recurso_fisico_id, recurso_fisico_nombre, estado, creado, actualizado) VALUES
 (2300, 'SC-2026-900001', 'RESUELTA', 'MEDIA', 'Duda sobre el teorema del binomio', 'Solicitud de asesoría académica registrada para el taller.', '2026-02-02', '08:00', 1700, 1712, 1600, 2000, 'Sede Central · Bloque Académico A · Salón 101', TRUE, '2026-01-28 09:00:00', '2026-02-01 09:00:00'),
 (2301, 'SC-2026-900002', 'RESUELTA', 'ALTA', 'Aclaración de la nota del primer parcial', 'Solicitud de asesoría académica registrada para el taller.', '2026-02-03', '08:00', 1701, 1713, 1601, 2001, 'Sede Norte · Bloque de Laboratorios · Laboratorio de Cómputo 1', TRUE, '2026-01-29 09:00:00', '2026-02-02 09:00:00'),
@@ -309,6 +346,7 @@ ON CONFLICT DO NOTHING;
 
 -- Calificaciones (10): SOLO sobre consultas RESUELTAS, una por solicitud.
 
+-- Conflictos cubiertos (01): PK(id) y uq_calificaciones_consulta_solicitud (parcial WHERE estado).
 INSERT INTO calificaciones_consulta (id, solicitud_id, puntaje, comentario, estado, creado, actualizado) VALUES
 (2500, 2300, 3, 'Valoración de la asesoría: buena atención.', TRUE, '2026-02-03 09:00:00', '2026-02-03 09:00:00'),
 (2501, 2301, 4, 'Valoración de la asesoría: muy buena atención.', TRUE, '2026-02-04 09:00:00', '2026-02-04 09:00:00'),
@@ -324,6 +362,7 @@ ON CONFLICT DO NOTHING;
 
 -- Comentarios (20): 15 de retroalimentacion del docente asignado + 5 del estudiante.
 
+-- Conflictos cubiertos (01): PK(id) y UNIQUE(codigo).
 INSERT INTO comentarios (id, codigo, contenido, editado, autor_id, solicitud_id, estado, creado, actualizado) VALUES
 (2400, 'DEMO-COM-0001', 'Revise la unidad 3 y traiga el ejercicio resuelto a la próxima asesoría.', FALSE, 1712, 2300, TRUE, '2026-02-03 10:00:00', '2026-02-03 10:00:00'),
 (2401, 'DEMO-COM-0002', 'Su planteamiento es correcto, profundice en la justificación teórica.', FALSE, 1713, 2301, TRUE, '2026-02-04 10:00:00', '2026-02-04 10:00:00'),
@@ -349,6 +388,7 @@ ON CONFLICT DO NOTHING;
 
 -- Notificaciones (20) coherentes con el estado de cada consulta.
 
+-- Conflictos cubiertos (01): PK(id) y UNIQUE(codigo).
 INSERT INTO notificaciones (id, codigo, remitente_id, destinatario_id, solicitud_consulta_id, tipo, titulo, mensaje, leida, estado, creado, actualizado) VALUES
 (2600, 'DEMO-NOT-0001', 1712, 1700, 2300, 'CAMBIO_ESTADO', 'Actualización del estado de su consulta', 'Su consulta cambió a RESUELTA.', TRUE, TRUE, '2026-02-02 12:00:00', '2026-02-02 12:00:00'),
 (2601, 'DEMO-NOT-0002', 1713, 1701, 2301, 'CAMBIO_ESTADO', 'Actualización del estado de su consulta', 'Su consulta cambió a RESUELTA.', FALSE, TRUE, '2026-02-03 12:00:00', '2026-02-03 12:00:00'),
@@ -374,6 +414,7 @@ ON CONFLICT DO NOTHING;
 
 -- Eventos de solicitud (20) coherentes con el estado.
 
+-- Conflictos cubiertos (01): PK(id) y UNIQUE(codigo).
 INSERT INTO eventos_solicitud (id, codigo, solicitud_id, usuario_id, tipo_evento, descripcion, fecha_evento, estado, creado, actualizado) VALUES
 (2700, 'DEMO-EVE-0001', 2300, 1712, 'CAMBIO_ESTADO', '[DEMO] Consulta marcada RESUELTA para 2026-02-02.', '2026-02-02 08:30:00', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (2701, 'DEMO-EVE-0002', 2301, 1713, 'CAMBIO_ESTADO', '[DEMO] Consulta marcada RESUELTA para 2026-02-03.', '2026-02-03 08:30:00', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -399,6 +440,7 @@ ON CONFLICT DO NOTHING;
 
 -- Tokens de recuperacion (10): solo hashes, sin contrasenas.
 
+-- Conflictos cubiertos (01): PK(id) y UNIQUE(token).
 INSERT INTO password_reset_tokens (id, token, usuario_id, fecha_expiracion, utilizado, estado, creado, actualizado) VALUES
 (2800, '12cf273e424ca21e7c7d389b50086346fe20bfe9b5f283c458e8b4010433dcb8', 1700, '2026-01-10 08:00:00', TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (2801, '53a946bab7abdf06273df5b317ab194a8c9581a8e188f8e7b97d2529c95265c6', 1701, '2026-01-11 08:00:00', FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -411,3 +453,109 @@ INSERT INTO password_reset_tokens (id, token, usuario_id, fecha_expiracion, util
 (2808, '1545dec48587867a273c66abb8a151fc7ef6784ed3cf680191a2e9a2b9f9f945', 1708, '2026-01-18 08:00:00', TRUE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (2809, 'feb722e9dc832a3324283b73e0bbb2e086733c39424794320c676e28dd2f8d63', 1709, '2026-01-19 08:00:00', FALSE, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Resincroniza TODAS las secuencias SERIAL tras insertar IDs explicitos.
+-- pg_get_serial_sequence() localiza la secuencia por la relacion OWNED BY
+-- del SERIAL de 01. La forma de 3 argumentos deja is_called = FALSE cuando
+-- la tabla esta vacia, asi el primer nextval() devuelve 1 y no 2.
+-- Reejecutar el script deja exactamente los mismos valores.
+-- ---------------------------------------------------------------------------
+
+
+SELECT setval(pg_get_serial_sequence('modulos', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM modulos;
+
+
+SELECT setval(pg_get_serial_sequence('modulos_sistema', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM modulos_sistema;
+
+
+SELECT setval(pg_get_serial_sequence('periodos_academicos', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM periodos_academicos;
+
+
+SELECT setval(pg_get_serial_sequence('programas_academicos', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM programas_academicos;
+
+
+SELECT setval(pg_get_serial_sequence('roles', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM roles;
+
+
+SELECT setval(pg_get_serial_sequence('sedes', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM sedes;
+
+
+SELECT setval(pg_get_serial_sequence('tipos_documento', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM tipos_documento;
+
+
+SELECT setval(pg_get_serial_sequence('modulos_x_rol', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM modulos_x_rol;
+
+
+SELECT setval(pg_get_serial_sequence('usuarios', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM usuarios;
+
+
+SELECT setval(pg_get_serial_sequence('zonas', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM zonas;
+
+
+SELECT setval(pg_get_serial_sequence('disponibilidad_docente', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM disponibilidad_docente;
+
+
+SELECT setval(pg_get_serial_sequence('docentes_modulos', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM docentes_modulos;
+
+
+SELECT setval(pg_get_serial_sequence('password_reset_tokens', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM password_reset_tokens;
+
+
+SELECT setval(pg_get_serial_sequence('recursos_fisicos', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM recursos_fisicos;
+
+
+SELECT setval(pg_get_serial_sequence('solicitudes_consultas', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM solicitudes_consultas;
+
+
+SELECT setval(pg_get_serial_sequence('calificaciones_consulta', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM calificaciones_consulta;
+
+
+SELECT setval(pg_get_serial_sequence('comentarios', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM comentarios;
+
+
+SELECT setval(pg_get_serial_sequence('eventos_solicitud', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM eventos_solicitud;
+
+
+SELECT setval(pg_get_serial_sequence('notificaciones', 'id'),
+              COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)
+FROM notificaciones;
+
+
+COMMIT;

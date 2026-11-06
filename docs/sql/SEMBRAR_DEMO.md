@@ -17,7 +17,11 @@ duplica filas. El script:
 
 1. Aplica `05_datos_demo_postgres.sql` sobre `DEMO_DB_URL` (por defecto un
    SQLite local en el directorio temporal); si es SQLite, crea el esquema con
-   `Base.metadata.create_all()`.
+   `Base.metadata.create_all()`. `05` está auditado para **PostgreSQL real**
+   (`BEGIN`/`COMMIT` y 19 `setval(pg_get_serial_sequence(...))`): en un motor
+   que no sea PostgreSQL el script omite esas sentencias, porque SQLAlchemy ya
+   gestiona la transacción con `motor.begin()` y SQLite no tiene secuencias
+   `SERIAL`. En Neon el `.sql` se ejecuta completo tal cual.
 2. Si se definen `DEMO_MYSQL_USER` y `DEMO_MYSQL_DATABASE` y existe el cliente
    `mysql`, aplica `06_datos_demo_mysql.sql`. Si no, imprime el comando
    equivalente para ejecutarlo a mano.
@@ -40,8 +44,10 @@ mysql -h 127.0.0.1 -P 3307 -u <usuario> -p <base_test> < docs/sql/06_datos_demo_
 
 ## Orden completo de scripts
 
-Ver [`LEEME.md`](LEEME.md): `01 → 02 → 05` para PostgreSQL y
-`03 → 04 → 06` para MySQL. Los pares son independientes entre sí.
+Ver [`LEEME.md`](LEEME.md): `01 → 02 → 05 → 07` para PostgreSQL y
+`03 → 04 → 06 → 08` para MySQL. Los pares son independientes entre sí.
+`07` y `08` son scripts de verificación **solo `SELECT`**, se ejecutan al
+final y no modifican nada.
 
 ## Contraseña de los usuarios demo
 
@@ -55,8 +61,41 @@ contraseña, define `DEMO_PASSWORD` y vuelve a generar el SQL con el
 procedimiento de este bloque; el hash cambiará y las cuentas demo usarán la
 nueva contraseña.
 
-Los correos son de dominio de ejemplo (`@ejemplo.edu.co`); no hay correos
-personales ni datos reales.
+Los correos usan el subdominio reservado de demostración
+`@demo.ejemplo.edu.co`; no hay correos personales ni datos reales.
+
+## Auditoría de `05` para PostgreSQL real
+
+- **Transacción atómica:** `BEGIN;` … `COMMIT;`. Si algo falla, no queda
+  siembra parcial.
+- **Secuencias:** como se insertan IDs explícitos (1000–2809), al final se
+  resincronizan **las 19 secuencias `SERIAL`** con
+  `SELECT setval(pg_get_serial_sequence('<tabla>', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL)`
+  para que los siguientes `INSERT` de la API no choquen con la PK.
+- **`ON CONFLICT DO NOTHING` sin objetivo:** es el único que cubre a la vez la
+  PK (IDs explícitos), los `UNIQUE` simples y los **16 índices únicos
+  parciales `WHERE estado`** de `01`. Un objetivo explícito
+  `ON CONFLICT (nombre) WHERE estado` no cubriría las filas inactivas ni los
+  conflictos de PK y rompería la idempotencia en la segunda ejecución.
+- **Sin sintaxis exclusiva de SQLite:** booleanos `TRUE`/`FALSE`, literales
+  `'YYYY-MM-DD'`, `'HH:MM'` y `'YYYY-MM-DD HH:MM:SS'` (PostgreSQL los
+  convierte implícitamente a `DATE`/`TIME`/`TIMESTAMP`), subconsultas
+  escalares y `CURRENT_TIMESTAMP`.
+- **Colisiones con los datos de prueba de Neon** (1 docente, 1 estudiante,
+  1 programa, 1 módulo) evitadas por construcción: correos en subdominio
+  reservado, identificaciones `9000000001`…`9000000020` y nombres de
+  programas/asignaturas con prefijo `[DEMO]`. **No se consultó Neon.**
+- **Idempotencia:** ejecutarlo dos veces no duplica filas y deja las 19
+  secuencias en el mismo valor.
+
+## Nombres de relleno
+
+Los 7 roles de catálogo, los 10 `modulos_sistema`, los 6 `tipos_documento` y
+los 8 servicios demo de MySQL dejaron de ser etiquetas genéricas: ahora son
+cargos, módulos, documentos y servicios con nombres realistas en español de
+Colombia. No se tocaron los 3 roles canónicos (`ADMINISTRADOR`, `DOCENTE`,
+`ESTUDIANTE`) ni se amplió ningún permiso: la matriz `modulos_x_rol` demo
+enlaza únicamente roles de catálogo inactivos con módulos de demostración.
 
 ## Decisiones tomadas en este bloque
 
@@ -77,9 +116,10 @@ personales ni datos reales.
 - **Comentarios del docente:** 15 de las 20 consultas atendidas tienen un
   comentario activo escrito por el docente asignado, de modo que
   `retroalimentacionDocente` se ve en el detalle y en el listado.
-- **Datos en español de Colombia:** nombres, 20 programas académicos, 20
-  asignaturas, 20 sedes/zonas/recursos, asuntos, comentarios y calificaciones
-  creíbles.
+- **Datos en español de Colombia:** nombres, 20 programas académicos y 20
+  asignaturas creíbles (con prefijo `[DEMO]` para no colisionar con el programa
+  y el módulo de prueba de Neon), 20 sedes/zonas/recursos, asuntos, comentarios
+  y calificaciones creíbles.
 - **MySQL, bitácoras y correos:** no se pudieron generar ejecutando el flujo
   real en local (no hay proveedor Nager.Date/Brevo ni SMTP locales; las
   pruebas simulan las respuestas). Por tanto `consultas_servicio_externo` (20)
@@ -88,13 +128,14 @@ personales ni datos reales.
   `exito = 0`, `codigo_http = NULL` y `estado_envio = FALLIDO`. **Nunca se
   presentan como llamadas ni envíos reales.** Los `festivos` sí son reales
   (2026 y 2027) y `servicios_externos` contiene los 2 proveedores reales
-  más 8 filas de demostración inactivas (`estado = 0`) y marcadas.
+  más 8 servicios de demostración inactivos (`estado = 0`), marcados con
+  `[DEMO]` y con nombres realistas (ya no `[DEMO] Proveedor N`).
 
 ## Validación realizada
 
 | Motor | Resultado |
 |---|---|
-| PostgreSQL | Sin servidor local en `5432`; no se conectó a Neon. `05` se validó sobre **SQLite local** con el mismo esquema (`Base.metadata.create_all`), las semillas de `02` y `PRAGMA foreign_keys=ON`: 19 tablas, FK sin violaciones, 20 filas en cada tabla principal y ≥10 en cada secundaria. |
-| MySQL | `06` se aplicó **dos veces** sobre la base local de pruebas `127.0.0.1:3307` mediante el arnés de jest: 38 festivos reales, 10 servicios, 20 bitácoras y 20 correos; la segunda ejecución no duplicó. Nunca se tocó Aiven. |
+| PostgreSQL | Sin servidor local en `5432`; no se conectó a Neon. Auditoría estática de `05` (`BEGIN`/`COMMIT`, 19 `setval`, `ON CONFLICT` sin objetivo, sin sintaxis SQLite) y aplicación **dos veces** sobre **SQLite local** con el mismo esquema (`Base.metadata.create_all`), las semillas de `02` y `PRAGMA foreign_keys=ON`, omitiendo solo `BEGIN`/`COMMIT`/`setval`: 19 tablas, FK sin violaciones, 20 filas en cada tabla principal y ≥10 en cada secundaria, sin duplicar. `07` no se puede ejecutar tal cual en SQLite (`EXTRACT(DOW FROM ...)`); se validó una **adaptación equivalente** con `strftime`: 19 tablas `CUMPLE`, 24 FK con 0 huérfanas, 0 calificaciones fuera de `RESUELTAS` y 0 domingos. |
+| MySQL | `06` se aplicó **dos veces** y `08` se ejecutó con sus 3 `SELECT` sobre la base local de pruebas `127.0.0.1:3307` mediante el arnés de jest: 38 festivos reales, 10 servicios, 20 bitácoras y 20 correos; la segunda ejecución no duplicó y las 4 tablas, las 5 FK y la coherencia `[DEMO]` dieron `CUMPLE`. Nunca se tocó Aiven. |
 
 **Nada de esto se ha ejecutado en Neon ni en Aiven.**
