@@ -1,19 +1,34 @@
 # Scripts SQL para entregar a un compañero
 
-Cinco archivos, dos motores independientes. **No contienen secretos,
-contraseñas, correos personales ni datos reales**, y no se ha ejecutado nada
-contra Neon ni contra Aiven.
+Seis scripts `.sql` (`01`–`06`) y dos documentos (`SEMBRAR_DEMO.md` y este
+`LEEME.md`). Dos motores independientes. **No contienen secretos ni correos
+personales**; los datos son de demostración salvo los festivos colombianos
+reales y los catálogos base. No se ha ejecutado nada contra Neon ni contra
+Aiven.
 
-## Orden de ejecución
+## Orden de ejecución de TODOS los scripts
 
-| Motor | Orden | Archivos |
-|---|---|---|
-| PostgreSQL (dominio de negocio, FastAPI) | 1 → 2 | `01_postgres_schema.sql`, `02_postgres_seed.sql` |
-| MySQL (servicios externos, Express) | 3 → 4 | `03_mysql_schema.sql`, `04_mysql_seed.sql` |
+| Paso | Motor | Archivo | Contenido |
+|---|---|---|---|
+| 1 | PostgreSQL | `01_postgres_schema.sql` | DDL de las 19 tablas, FK, únicos parciales, función y triggers |
+| 2 | PostgreSQL | `02_postgres_seed.sql` | Semillas base: roles, `modulos_sistema`, `modulos_x_rol`, tipos de documento, periodo |
+| 3 | MySQL | `03_mysql_schema.sql` | DDL de las 4 tablas de servicios externos |
+| 4 | MySQL | `04_mysql_seed.sql` | 2 proveedores reales (Nager.Date, Brevo) |
+| 5 | PostgreSQL | `05_datos_demo_postgres.sql` | Datos de demostración (20 principales / ≥10 secundarias) |
+| 6 | MySQL | `06_datos_demo_mysql.sql` | Festivos reales 2026–2027 y filas demo marcadas `[DEMO]` |
 
-Cada par va sobre una base vacía. Los dos pares son independientes entre sí:
-se pueden ejecutar en cualquier orden relativo, pero dentro de cada par el
-esquema va antes que la semilla.
+Reglas del orden:
+
+- **Dentro de cada motor el esquema va antes que las semillas y los datos**:
+  `01 → 02 → 05` y `03 → 04 → 06`.
+- Los pares de motores son independientes entre sí: se pueden ejecutar en
+  cualquier orden relativo.
+- `05` y `06` son **idempotentes** (`ON CONFLICT DO NOTHING` / `INSERT IGNORE`
+  e IDs en rango alto), así que se pueden repetir sin duplicar filas.
+- Para la siembra **local** existe el comando idempotente
+  `python scripts/sembrar_demo.py`, documentado en
+  [`SEMBRAR_DEMO.md`](SEMBRAR_DEMO.md). Los `.sql` de la nube los ejecuta el
+  responsable del proyecto (paso pendiente).
 
 ## Versiones asumidas
 
@@ -28,7 +43,7 @@ esquema va antes que la semilla.
   `infraestructura-service/sql/schema.sql`. El servicio Express usa `mysql2`
   sobre Node 24.
 
-## Sobre `01_postgres_schema.sql` (ajuste del Bloque E)
+## Sobre `01_postgres_schema.sql` (Bloque E)
 
 - **Se generó compilando los modelos SQLAlchemy** (`backend/app/models`) con el
   dialecto de PostgreSQL, **sin conectarse a ninguna base de datos**.
@@ -43,7 +58,7 @@ esquema va antes que la semilla.
 - **Cierra con una consulta de comprobación comentada**: conteo de tablas del
   esquema `public`, que debe devolver **19**.
 
-## Sobre `02_postgres_seed.sql` (ajuste del Bloque E)
+## Sobre `02_postgres_seed.sql` (Bloque E)
 
 Replica **todo lo que inserta `ejecutar_seeds()`** al arrancar
 (`backend/app/db/seeds.py`) sobre la base vacía:
@@ -76,7 +91,7 @@ administrador**.
 
 ## Administrador inicial
 
-**No hay ningún usuario administrador en estos scripts.** Se crea
+**No hay ningún usuario administrador en `01`–`04`.** Se crea
 automáticamente al arrancar el backend, y solo si están las tres variables de
 entorno:
 
@@ -87,6 +102,33 @@ entorno:
 Si falta alguna, no se crea el administrador y se registra una advertencia en
 el log (sin imprimir los valores). Aquí solo se documentan los **nombres** de
 las variables; no se incluyen valores, contraseñas ni correos.
+
+## Sobre `05_datos_demo_postgres.sql` (Bloque B)
+
+Datos de demostración en español de Colombia para las 19 tablas: 20 registros
+en cada tabla principal y 10 o más en cada secundaria (contando las semillas
+base). Incluye los 3 roles canónicos de forma idempotente, 20 usuarios demo
+(12 estudiantes, 6 docentes, 2 administradores) con correos de dominio de
+ejemplo y **solo el hash bcrypt** de `DEMO_PASSWORD`, 20 programas, 20
+asignaturas, 20 sedes/zonas/recursos, 20 solicitudes con `numero_consulta`
+`SC-2026-9000xx` en fechas que no son domingo ni festivo colombiano de
+2026/2027, 10 calificaciones **solo sobre consultas `RESUELTAS`**, 20
+comentarios (15 del docente asignado, para que se vea
+`retroalimentacionDocente`), 20 notificaciones y 20 eventos coherentes con el
+estado, y 10 tokens de recuperación con hash. Detalle completo en
+[`SEMBRAR_DEMO.md`](SEMBRAR_DEMO.md).
+
+## Sobre `06_datos_demo_mysql.sql` (Bloque B)
+
+38 festivos **reales** de Colombia 2026 y 2027 (19 por año, con la corrección
+Ley Emiliani), los 2 proveedores reales más 8 servicios de demostración
+inactivos y marcados, y 20 `consultas_servicio_externo` + 20
+`correos_enviados` **sintéticos marcados explícitamente con `[DEMO]`** en
+`detalle` / `respuesta_proveedor`, con `exito = 0`, `codigo_http = NULL` y
+`estado_envio = FALLIDO`. No se generaron ejecutando el flujo real en local
+(no hay proveedor ni SMTP locales; las pruebas simulan las respuestas) y
+**nunca se presentan como llamadas ni envíos reales**. Decisión documentada en
+[`SEMBRAR_DEMO.md`](SEMBRAR_DEMO.md).
 
 ## `03` y `04` (MySQL)
 
@@ -104,11 +146,30 @@ Se verificó con SHA-256 que origen y copia son idénticos.
 
 | Motor | Resultado |
 |---|---|
-| PostgreSQL | **No se pudo validar en una base vacía**: no hay servidor local en `127.0.0.1:5432` ni cliente `psql`/`pg_isready` en el equipo, y está prohibido conectarse a Neon. Verificación **estática** del SQL generado: **19** `CREATE TABLE`, **19** `CREATE TRIGGER`, **16** índices parciales `WHERE estado`, **24** `FOREIGN KEY`. |
-| MySQL | El puerto local `127.0.0.1:3307` responde (es el que usa jest), pero **la autenticación con parámetros explícitos falló** (`ER_ACCESS_DENIED_ERROR`). Siguiendo la instrucción, **no se intentaron credenciales de archivos `.env`** y se mantuvo la verificación **estática**: **4** `CREATE TABLE` en `03`. No se creó ni se dejó ninguna base: el intento de base temporal `docs_sql_e_test` se canceló antes de crearse y, de haberse creado, el script la elimina en `finally`. Nunca se tocó Aiven. |
+| PostgreSQL | **No hay servidor local en `127.0.0.1:5432`** ni cliente `psql`; está prohibido conectarse a Neon. `01` se verificó de forma estática (19 `CREATE TABLE`, 19 triggers, 16 índices parciales, 24 FK). `05` se validó sobre **SQLite local** con el mismo esquema (`Base.metadata.create_all`), las semillas de `02` y `PRAGMA foreign_keys=ON`: FK sin violaciones, 20 filas por tabla principal, ≥10 por secundaria, calificaciones solo en `RESUELTAS` y ninguna fecha en domingo. |
+| MySQL | El puerto local `127.0.0.1:3307` responde. En el Bloque E la autenticación con parámetros explícitos falló (`ER_ACCESS_DENIED_ERROR`) y **no se intentaron credenciales de `.env`**, por lo que `03`/`04` se verificaron de forma estática. En el Bloque B, `06` **sí se aplicó dos veces** sobre la base local de pruebas mediante el arnés de jest: 38 festivos, 10 servicios, 20 bitácoras y 20 correos, sin duplicar en la segunda ejecución. Nunca se tocó Aiven. |
 
-Verificación estática adicional: `02` tiene 5 bloques `INSERT` y **ninguno**
-sobre `usuarios`; no hay contraseñas ni correos personales en ningún archivo.
+Verificación adicional: `02` tiene 5 bloques `INSERT` y ninguno sobre
+`usuarios`; `05` contiene únicamente el hash bcrypt (nunca la contraseña en
+claro); no hay correos personales en ningún archivo.
 
 **Nada de esto está desplegado ni probado en producción**: son scripts de
-entrega para un compañero, generados y revisados localmente.
+entrega para un compañero, generados y revisados localmente. El responsable
+del proyecto ejecuta los `.sql` en Neon y en Aiven y realiza el push.
+
+## Supuestos y puntos no verificados
+
+1. **La «estructura de la clase 1» no se pudo verificar.** El documento no
+   fue entregado, así que no se comparó con la API ni se asumió su contenido.
+   La API se mantuvo como estaba: `routes → services → repositories →
+   schemas`, con cambios aditivos del Bloque C (catálogos con nombre, módulos
+   del usuario, nota y retroalimentación embebidas y `fechaActualizacion`).
+2. **«CRUD en todos los roles» se interpretó como CRUD sobre las entidades
+   propias de cada rol**, sin ampliar permisos de escritura de ningún rol
+   (decisión documentada en `docs/decisiones.md`).
+3. **La calificación la crea el estudiante dueño de la consulta resuelta**;
+   no se invirtió esa regla de negocio.
+4. Los festivos de 2027 se calcularon con las reglas de Ley Emiliani y el
+   cómputo de Pascua, tomando como referencia el fixture real de 2026 de
+   Nager.Date. No se consultó la API en la nube.
+5. Las filas `[DEMO]` de MySQL son datos de demostración, no trazas reales.

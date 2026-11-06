@@ -134,3 +134,76 @@ cd infraestructura-service && npm test  # servicio de infraestructura (Express)
 Guía de **pasos pendientes** en
 [`docs/despliegue-render.md`](docs/despliegue-render.md): nada de lo descrito
 está desplegado ni probado en producción.
+
+## Entrega del taller (Fase 6)
+
+### Versión local
+
+- Backend FastAPI + Express con bases locales (SQLite para el backend en
+  pruebas, MySQL local en `127.0.0.1:3307` para los servicios externos).
+- Esquemas, semillas y datos de demostración en
+  [`docs/sql/LEEME.md`](docs/sql/LEEME.md). Siembra idempotente:
+  ```bash
+  python scripts/sembrar_demo.py        # ver docs/sql/SEMBRAR_DEMO.md
+  ```
+- Pruebas locales:
+  ```bash
+  cd backend && python -m pytest
+  cd infraestructura-service && npm.cmd test
+  ```
+
+### Versión en la nube (pasos pendientes)
+
+- **Neon (PostgreSQL)**: ejecutar `01`, `02` y `05` en ese orden.
+- **Aiven (MySQL)**: ejecutar `03`, `04` y `06` en ese orden.
+- **Render**: configurar las variables de ambos servicios, medir
+  `TRUSTED_PROXY_HOPS` y desplegar. El push y la ejecución de los `.sql` en la
+  nube los realiza el responsable del proyecto. **Nada está desplegado ni
+  probado en producción.**
+
+### Links (marcadores para completar)
+
+| Recurso | Link |
+|---|---|
+| Repositorio | `[PEGAR LINK]` |
+| Frontend (lo entrega un compañero) | `[PEGAR LINK]` |
+| API FastAPI en la nube | `[PEGAR LINK]` |
+| Servicio Express en la nube | `[PEGAR LINK]` |
+| Documento de la estructura de la clase 1 | `[NO DISPONIBLE]` |
+
+### Evidencias de video por punto
+
+| # | Punto del taller | Video |
+|---|---|---|
+| 1 | Tablas con `creado`, `actualizado` y `estado` en PostgreSQL y MySQL | `[PEGAR LINK]` |
+| 2 | 20 registros por tabla principal y 10 por secundaria, datos en español de Colombia | `[PEGAR LINK]` |
+| 3 | Scripts `.sql`: versión local y versión para la nube | `[PEGAR LINK]` |
+| 4 | CRUD de los tres roles sobre sus entidades propias | `[PEGAR LINK]` |
+| 5 | Flujo entre roles: estudiante crea, docente atiende y retroalimenta, administrador asigna recurso, estudiante ve nota y retroalimentación | `[PEGAR LINK]` |
+| 6 | Módulos de cada rol leídos de `modulos_x_rol` (`GET /auth/me/modulos`) | `[PEGAR LINK]` |
+| 7 | Catálogos con nombres legibles para los `select` (sin pedir IDs al usuario) | `[PEGAR LINK]` |
+| 8 | Usuarios de demostración de los tres roles y contraseña desde `DEMO_PASSWORD` | `[PEGAR LINK]` |
+| 9 | Seguridad: JWT HS256, política de contraseñas, límites 429, cabeceras y límite de cuerpo | `[PEGAR LINK]` |
+| 10 | Estructura de la clase 1 (pendiente de verificar, ver sección siguiente) | `[PENDIENTE]` |
+
+## Supuestos y puntos no verificados
+
+1. **La «estructura de la clase 1» no se pudo verificar.** El documento no fue
+   entregado, por lo que no se comparó con la API ni se asumió su contenido.
+   La API se mantuvo como estaba: `routes → services → repositories →
+   schemas`, con los cambios aditivos del Bloque C (catálogos con nombre,
+   módulos del usuario, nota y retroalimentación embebidas y
+   `fechaActualizacion`). Queda pendiente la comparación con ese documento.
+2. **«CRUD en todos los roles» se interpretó como CRUD sobre las entidades
+   propias de cada rol**, sin ampliar permisos de escritura de ningún rol. El
+   estudiante gestiona sus consultas, comentarios y calificaciones; el docente
+   atiende consultas, retroalimenta y mantiene su disponibilidad; el
+   administrador administra catálogos, usuarios, roles y asignaciones. Los
+   catálogos son de lectura para todos los roles autenticados (decisión de
+   seguridad documentada en `docs/decisiones.md`).
+3. **La calificación la crea el estudiante dueño de la consulta resuelta.**
+   No se invirtió esa regla (`app/services/calificacion_consulta.py`): el
+   docente recibe `403` si intenta calificar y la consulta debe estar en
+   estado `RESUELTA`.
+4. Sin secretos, contraseñas en claro ni correos personales en esta entrega.
+
