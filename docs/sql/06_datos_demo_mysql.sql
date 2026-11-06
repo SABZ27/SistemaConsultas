@@ -17,19 +17,20 @@
 -- ============================================================================
 
 
--- Proveedores reales (coinciden con 04) + 8 de demostracion inactivos.
+-- Proveedores reales (coinciden con 04) + 8 servicios de demostracion
+-- inactivos con nombres realistas en español de Colombia (no genericos).
 
 INSERT IGNORE INTO servicios_externos (id, nombre, url_base, descripcion, estado) VALUES
 (900, 'Nager.Date', 'https://date.nager.at/api/v4', 'API pública de festivos por país', 1),
 (901, 'Brevo', 'https://api.brevo.com/v3', 'API de correo transaccional', 1),
-(910, '[DEMO] Proveedor 1', 'https://ejemplo.edu.co/demo/1', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(911, '[DEMO] Proveedor 2', 'https://ejemplo.edu.co/demo/2', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(912, '[DEMO] Proveedor 3', 'https://ejemplo.edu.co/demo/3', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(913, '[DEMO] Proveedor 4', 'https://ejemplo.edu.co/demo/4', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(914, '[DEMO] Proveedor 5', 'https://ejemplo.edu.co/demo/5', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(915, '[DEMO] Proveedor 6', 'https://ejemplo.edu.co/demo/6', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(916, '[DEMO] Proveedor 7', 'https://ejemplo.edu.co/demo/7', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
-(917, '[DEMO] Proveedor 8', 'https://ejemplo.edu.co/demo/8', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0);
+(910, '[DEMO] Simulador de Calendario de Festivos', 'https://demo.ejemplo.edu.co/servicios/1', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(911, '[DEMO] Simulador de Correo Institucional', 'https://demo.ejemplo.edu.co/servicios/2', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(912, '[DEMO] Consulta de Calendario Académico', 'https://demo.ejemplo.edu.co/servicios/3', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(913, '[DEMO] Consulta de Matrícula Estudiantil', 'https://demo.ejemplo.edu.co/servicios/4', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(914, '[DEMO] Consulta de Horarios Institucionales', 'https://demo.ejemplo.edu.co/servicios/5', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(915, '[DEMO] Consulta de Catálogo Bibliográfico', 'https://demo.ejemplo.edu.co/servicios/6', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(916, '[DEMO] Consulta de Bienestar Universitario', 'https://demo.ejemplo.edu.co/servicios/7', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0),
+(917, '[DEMO] Consulta de Reportes de Gestión', 'https://demo.ejemplo.edu.co/servicios/8', '[DEMO] Servicio de demostración, inactivo. No se usa en ningún flujo real.', 0);
 
 -- Festivos reales de Colombia 2026-2027 (38), con Ley Emiliani.
 
@@ -100,23 +101,23 @@ INSERT IGNORE INTO consultas_servicio_externo (id, servicio_id, referencia, endp
 -- [DEMO] Correos sinteticos: NO son envios reales.
 
 INSERT IGNORE INTO correos_enviados (id, servicio_id, consulta_servicio_id, destinatario, asunto, estado_envio, respuesta_proveedor, estado) VALUES
-(3000, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2000, 'estudiante01@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3001, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2001, 'estudiante02@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3002, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2002, 'estudiante03@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3003, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2003, 'estudiante04@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3004, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2004, 'estudiante05@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3005, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2005, 'estudiante06@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3006, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2006, 'estudiante07@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3007, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2007, 'estudiante08@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3008, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2008, 'estudiante09@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3009, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2009, 'estudiante10@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3010, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2010, 'estudiante11@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3011, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2011, 'estudiante12@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3012, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2012, 'estudiante13@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3013, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2013, 'estudiante14@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3014, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2014, 'estudiante15@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3015, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2015, 'estudiante16@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3016, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2016, 'estudiante17@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3017, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2017, 'estudiante18@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3018, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2018, 'estudiante19@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
-(3019, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2019, 'estudiante20@ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1);
+(3000, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2000, 'estudiante01@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3001, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2001, 'estudiante02@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3002, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2002, 'estudiante03@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3003, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2003, 'estudiante04@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3004, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2004, 'estudiante05@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3005, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2005, 'estudiante06@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3006, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2006, 'estudiante07@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3007, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2007, 'estudiante08@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3008, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2008, 'estudiante09@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3009, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2009, 'estudiante10@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3010, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2010, 'estudiante11@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3011, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2011, 'estudiante12@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3012, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2012, 'estudiante13@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3013, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2013, 'estudiante14@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3014, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2014, 'estudiante15@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3015, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2015, 'estudiante16@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3016, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2016, 'estudiante17@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3017, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2017, 'estudiante18@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3018, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2018, 'estudiante19@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1),
+(3019, (SELECT id FROM servicios_externos WHERE nombre = 'Brevo' ORDER BY id LIMIT 1), 2019, 'estudiante20@demo.ejemplo.edu.co', '[DEMO] Correo de demostración', 'FALLIDO', '[DEMO] Sin envío real. Fila sintética de demostración.', 1);
