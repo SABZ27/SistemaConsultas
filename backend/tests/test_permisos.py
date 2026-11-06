@@ -124,6 +124,9 @@ def test_crear_usuario_por_admin(client):
     )
     assert resp.status_code == 201
     assert resp.json()["rol"] == "DOCENTE"
+    # Bloque G: el administrador sí ve identificación y correo en UsuarioResponse.
+    assert resp.json()["identificacion"] == "5555555555"
+    assert resp.json()["correo"] == "nuevo.docente@test.com"
 
     login = client.post(
         "/auth/login",
@@ -147,6 +150,9 @@ def test_perfil_propio_o_modulo(client):
     propio = client.get(f"/usuarios/{docente['id_usuario']}", headers=auth(docente["token"]))
     assert propio.status_code == 200
     assert propio.json()["id"] == docente["id_usuario"]
+    # Bloque G: el perfil propio conserva identificación y correo (no null).
+    assert propio.json()["identificacion"] is not None
+    assert propio.json()["correo"] is not None
 
     ajeno = client.get(f"/usuarios/{otro['id_usuario']}", headers=auth(docente["token"]))
     assert ajeno.status_code == 403

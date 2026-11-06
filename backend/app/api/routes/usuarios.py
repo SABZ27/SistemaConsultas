@@ -35,7 +35,7 @@ def listar_usuarios(
     db: Session = Depends(get_db),
     _usuario=Depends(requiere_modulo(NOMBRE_MODULO_USUARIOS)),
 ):
-    return UsuarioService(db).listar_usuarios(incluir_inactivos)
+    return UsuarioService(db).listar_usuarios(incluir_inactivos, _usuario)
 
 
 @router.post("", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
@@ -44,7 +44,7 @@ def crear_usuario(
     db: Session = Depends(get_db),
     _usuario=Depends(requiere_modulo(NOMBRE_MODULO_USUARIOS)),
 ):
-    return UsuarioService(db).crear_usuario(req)
+    return UsuarioService(db).crear_usuario(req, _usuario)
 
 
 @router.get("/docentes", response_model=list[DocenteResumen])
@@ -62,7 +62,7 @@ def obtener_usuario(
     usuario=Depends(get_current_user),
 ):
     _acceso_propio_o_modulo(id_usuario, usuario, db)
-    return UsuarioService(db).obtener_usuario_por_id(id_usuario)
+    return UsuarioService(db).obtener_usuario_por_id(id_usuario, usuario)
 
 
 @router.put("/{id_usuario}", response_model=UsuarioResponse)
@@ -73,7 +73,7 @@ def actualizar_usuario(
     usuario=Depends(get_current_user),
 ):
     _acceso_propio_o_modulo(id_usuario, usuario, db)
-    return UsuarioService(db).actualizar_usuario(id_usuario, req)
+    return UsuarioService(db).actualizar_usuario(id_usuario, req, usuario)
 
 
 @router.patch("/{id_usuario}/activar", response_model=UsuarioResponse)
@@ -82,7 +82,7 @@ def activar_usuario(
     db: Session = Depends(get_db),
     _usuario=Depends(requiere_modulo(NOMBRE_MODULO_USUARIOS)),
 ):
-    return UsuarioService(db).activar_usuario(id_usuario)
+    return UsuarioService(db).activar_usuario(id_usuario, _usuario)
 
 
 @router.delete("/{id_usuario}", status_code=status.HTTP_204_NO_CONTENT)

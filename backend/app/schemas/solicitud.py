@@ -59,10 +59,10 @@ class SolicitudConsultaResponse(BaseModel):
     fechaConsulta: date
     horaConsulta: time
     estudianteId: int
-    identificacionEstudiante: str
+    identificacionEstudiante: str | None
     nombreCompletoEstudiante: str
     docenteId: int
-    identificacionDocente: str
+    identificacionDocente: str | None
     nombreCompletoDocente: str
     moduloId: int
     nombreModulo: str

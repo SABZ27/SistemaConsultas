@@ -23,17 +23,23 @@ class UsuarioService:
         self.rol_repo = RolRepository(db)
         self.tipo_doc_repo = TipoDocumentoRepository(db)
 
-    def listar_usuarios(self, incluir_inactivos: bool = False):
+    def listar_usuarios(
+        self, incluir_inactivos: bool = False, usuario_actual: Usuario | None = None
+    ):
         filas = self.user_repo.find_all() if incluir_inactivos else self.user_repo.find_all_by_estado_true()
-        return [usuario_response(u) for u in filas]
+        return [usuario_response(u, usuario_actual) for u in filas]
 
-    def obtener_usuario_por_id(self, id_usuario: int):
+    def obtener_usuario_por_id(
+        self, id_usuario: int, usuario_actual: Usuario | None = None
+    ):
         usuario = self.user_repo.find_by_id_and_estado_true(id_usuario)
         if usuario is None:
             raise ResourceNotFoundException("Usuario no encontrado.")
-        return usuario_response(usuario)
+        return usuario_response(usuario, usuario_actual)
 
-    def crear_usuario(self, req: RegistroUsuarioRequest):
+    def crear_usuario(
+        self, req: RegistroUsuarioRequest, usuario_actual: Usuario | None = None
+    ):
         if self.user_repo.find_by_correo_and_estado_true(req.correo) is not None:
             raise BadRequestException("El correo ya está registrado")
         if self.user_repo.find_by_identificacion_and_estado_true(req.identificacion) is not None:
@@ -62,9 +68,14 @@ class UsuarioService:
             tipo_documento=tipo_documento,
         )
         self.user_repo.save(usuario)
-        return usuario_response(usuario)
+        return usuario_response(usuario, usuario_actual)
 
-    def actualizar_usuario(self, id_usuario: int, req: UpdateUsuarioRequest):
+    def actualizar_usuario(
+        self,
+        id_usuario: int,
+        req: UpdateUsuarioRequest,
+        usuario_actual: Usuario | None = None,
+    ):
         usuario = self.user_repo.find_by_id_and_estado_true(id_usuario)
         if usuario is None:
             raise ResourceNotFoundException("Usuario no encontrado.")
@@ -86,7 +97,7 @@ class UsuarioService:
         usuario.programa = programa
         usuario.tipo_documento = self._resolver_tipo_documento(req.tipoDocumentoId)
 
-        return usuario_response(usuario)
+        return usuario_response(usuario, usuario_actual)
 
     def _resolver_tipo_documento(self, tipo_documento_id: int | None):
         if tipo_documento_id is None:
@@ -102,12 +113,14 @@ class UsuarioService:
             raise ResourceNotFoundException("Usuario no encontrado.")
         usuario.estado = False
 
-    def activar_usuario(self, id_usuario: int):
+    def activar_usuario(
+        self, id_usuario: int, usuario_actual: Usuario | None = None
+    ):
         usuario = self.user_repo.find_by_id(id_usuario)
         if usuario is None:
             raise ResourceNotFoundException("Usuario no encontrado.")
         usuario.estado = True
-        return usuario_response(usuario)
+        return usuario_response(usuario, usuario_actual)
 
     def listar_docentes(self):
         return [

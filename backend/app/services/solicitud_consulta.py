@@ -102,7 +102,7 @@ class SolicitudConsultaService:
         self.notificacion_service.notificar_nueva_solicitud(solicitud_guardada, estudiante)
         self.evento_service.nueva_solicitud(solicitud_guardada, estudiante)
 
-        return solicitud_consulta_response(solicitud_guardada)
+        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
 
     def obtener_por_id(self, id_solicitud: int, usuario_actual: Usuario):
         solicitud = self._obtener_solicitud(id_solicitud)
@@ -113,7 +113,7 @@ class SolicitudConsultaService:
                 status_code=403,
                 detail="No tiene permisos para consultar esta solicitud.",
             )
-        return solicitud_consulta_response(solicitud)
+        return solicitud_consulta_response(solicitud, usuario_actual)
 
     def listar_todas(self, usuario_actual: Usuario):
         if usuario_actual.rol == Rol.ESTUDIANTE:
@@ -127,7 +127,7 @@ class SolicitudConsultaService:
                     detail="No tiene permisos para consultar todas las solicitudes.",
                 )
             filas = self.repo.find_all()
-        return [solicitud_consulta_response(s) for s in filas]
+        return [solicitud_consulta_response(s, usuario_actual) for s in filas]
 
     def actualizar(
         self,
@@ -175,7 +175,7 @@ class SolicitudConsultaService:
             )
             self.evento_service.cambio_agenda(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada)
+        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
 
     def asignar_recurso_fisico(
         self,
@@ -211,7 +211,7 @@ class SolicitudConsultaService:
         )
         self.evento_service.asignacion_recurso(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada)
+        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
 
     def cambiar_estado(
         self,
@@ -233,7 +233,7 @@ class SolicitudConsultaService:
         )
         self.evento_service.cambio_estado(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada)
+        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
 
     def reasignar_docente(
         self,
@@ -260,7 +260,7 @@ class SolicitudConsultaService:
         )
         self.evento_service.reasignacion(solicitud_guardada, usuario_actual)
 
-        return solicitud_consulta_response(solicitud_guardada)
+        return solicitud_consulta_response(solicitud_guardada, usuario_actual)
 
     def eliminar(self, id_solicitud: int, usuario_actual: Usuario) -> None:
         solicitud = self._obtener_solicitud(id_solicitud)

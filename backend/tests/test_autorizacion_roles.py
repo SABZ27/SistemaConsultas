@@ -465,3 +465,127 @@ def test_notificacion_ajena_no_se_puede_marcar_como_leida(client, identidades):
         f"/notificaciones/{propias[0]['id']}/leer", headers=otro["headers"]
     )
     assert respuesta.status_code not in (200, 204)
+
+
+# --- Bloque G: datos personales por rol ------------------------------------
+def _solicitud_para_datos_personales(client, identidades, nombre_modulo, hora):
+    admin = identidades["ADMINISTRADOR"]
+    docente = identidades["DOCENTE"]
+    estudiante = identidades["ESTUDIANTE"]
+    modulo = crear_modulo(client, admin["token"], nombre=nombre_modulo)
+    return crear_solicitud(
+        client, estudiante["token"], docente["id"], modulo["id"], hora=hora
+    )
+
+
+def test_solicitud_estudiante_ve_su_identificacion_y_no_la_del_docente(
+    client, identidades
+):
+    sol = _solicitud_para_datos_personales(
+        client, identidades, "Modulo G estudiante", "07:30"
+    )
+    cuerpo = client.get(
+        f"/solicitudes-consultas/{sol['id']}",
+        headers=identidades["ESTUDIANTE"]["headers"],
+    ).json()
+    assert cuerpo["identificacionEstudiante"] == "9000000101"
+    assert cuerpo["identificacionDocente"] is None
+
+
+def test_solicitud_docente_ve_su_identificacion_y_no_la_del_estudiante(
+    client, identidades
+):
+    sol = _solicitud_para_datos_personales(
+        client, identidades, "Modulo G docente", "08:30"
+    )
+    cuerpo = client.get(
+        f"/solicitudes-consultas/{sol['id']}",
+        headers=identidades["DOCENTE"]["headers"],
+    ).json()
+    assert cuerpo["identificacionDocente"] == "9000000103"
+    assert cuerpo["identificacionEstudiante"] is None
+
+
+def test_solicitud_administrador_ve_ambas_identificaciones(client, identidades):
+    sol = _solicitud_para_datos_personales(
+        client, identidades, "Modulo G admin", "09:30"
+    )
+    cuerpo = client.get(
+        f"/solicitudes-consultas/{sol['id']}",
+        headers=identidades["ADMINISTRADOR"]["headers"],
+    ).json()
+    assert cuerpo["identificacionEstudiante"] == "9000000101"
+    assert cuerpo["identificacionDocente"] == "9000000103"
+
+
+def test_listado_solicitudes_enmascara_segun_el_rol(client, identidades):
+    sol = _solicitud_para_datos_personales(
+        client, identidades, "Modulo G listado", "10:30"
+    )
+    estudiante = client.get(
+        "/solicitudes-consultas", headers=identidades["ESTUDIANTE"]["headers"]
+    ).json()
+    fila_est = next(s for s in estudiante if s["id"] == sol["id"])
+    assert fila_est["identificacionEstudiante"] == "9000000101"
+    assert fila_est["identificacionDocente"] is None
+
+    admin = client.get(
+        "/solicitudes-consultas", headers=identidades["ADMINISTRADOR"]["headers"]
+    ).json()
+    fila_admin = next(s for s in admin if s["id"] == sol["id"])
+    assert fila_admin["identificacionEstudiante"] == "9000000101"
+    assert fila_admin["identificacionDocente"] == "9000000103"
+
+
+def test_usuario_propio_ve_identificacion_y_correo(client, identidades):
+    est = identidades["ESTUDIANTE"]
+    cuerpo = client.get(f"/usuarios/{est['id']}", headers=est["headers"]).json()
+    assert cuerpo["identificacion"] == "9000000101"
+    assert cuerpo["correo"] == "bloqueD.est@test.com"
+
+
+def test_administrador_ve_identificacion_y_correo_de_cualquier_usuario(
+    client, identidades
+):
+    est = identidades["ESTUDIANTE"]
+    cuerpo = client.get(
+        f"/usuarios/{est['id']}", headers=identidades["ADMINISTRADOR"]["headers"]
+    ).json()
+    assert cuerpo["identificacion"] == "9000000101"
+    assert cuerpo["correo"] == "bloqueD.est@test.com"
+
+    listado = client.get(
+        "/usuarios", headers=identidades["ADMINISTRADOR"]["headers"]
+    ).json()
+    assert listado
+    assert all(u["identificacion"] and u["correo"] for u in listado)
+
+
+def test_mapper_usuario_enmascara_a_otros_roles():
+    """Defensa en profundidad: el mapper oculta los campos a otro usuario."""
+    from app.mappers.usuario import usuario_response
+
+    with SessionLocal() as db:
+        est = db.query(Usuario).filter_by(correo="bloqueD.est@test.com").one()
+        otro = db.query(Usuario).filter_by(correo="bloqueD.otro@test.com").one()
+        admin = db.query(Usuario).filter_by(correo="admin@test.com").one()
+
+        ajeno = usuario_response(est, usuario_actual=otro)
+        assert ajeno.identificacion is None
+        assert ajeno.correo is None
+
+        propio = usuario_response(est, usuario_actual=est)
+        assert propio.identificacion == "9000000101"
+        assert propio.correo == "bloqueD.est@test.com"
+
+        como_admin = usuario_response(est, usuario_actual=admin)
+        assert como_admin.identificacion == "9000000101"
+        assert como_admin.correo == "bloqueD.est@test.com"
+
+
+def test_listado_docentes_no_expone_identificacion_ni_correo(client, identidades):
+    cuerpo = client.get(
+        "/usuarios/docentes", headers=identidades["ESTUDIANTE"]["headers"]
+    ).json()
+    assert cuerpo
+    assert all(set(u) == {"id", "nombre", "apellido"} for u in cuerpo)

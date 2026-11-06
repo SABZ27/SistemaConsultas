@@ -1,8 +1,31 @@
 # Auditoría de dependencias (Bloque D.b — solo informe)
 
-Ejecutada localmente el 2026-11-06. **No se aplicó ninguna corrección** ni se
-modificaron `requirements.txt`, `package.json` ni ningún lockfile. `pip-audit`
+Ejecutada localmente el 2026-11-06; actualizada en el **Bloque G**. `pip-audit`
 se instaló únicamente en el entorno local del usuario.
+
+## Bloque G: corrección aplicada
+
+- **`body-parser` 1.20.8 → 1.20.9** aplicada de forma selectiva en
+  `infraestructura-service/package-lock.json` (dependencia transitiva de
+  `express`, que declara `body-parser: ~1.20.5`, por lo que 1.20.9 cabe en el
+  rango sin cambio de major). Se usó `npm update body-parser` **sin `--force`**:
+  un `npm audit fix` normal también habría subido `qs` a 6.16.2, fuera del
+  alcance del bloque. Al reescribir el lock, npm normaliza además
+  `engines.node` de `>=20` a `24.x`; ese hunk se revirtió con una edición
+  puntual. El diff final del lock son **solo las 3 líneas de `body-parser`**
+  (versión, `resolved`, `integrity`) y **`package.json` no cambió**.
+- Comprobación con `npm.cmd audit --json`: la alta de `body-parser`
+  desaparece; quedan **1 alta** (`zod`), **1 moderada** (`qs`) y **6 bajas**
+  (cadena de `jest`), **0 críticas**. Es el resultado esperado, no una
+  regresión. `npm.cmd test` sigue en 84 passed / 10 suites.
+- **`zod` NO se toca.** El aviso GHSA-mrhx-c7xc-m3w5 exige `zod` **4.6.7**
+  (`isSemVerMajor: true`), es decir migrar de 3.x a 4.x: un cambio mayor que
+  obligaría a revisar y reescribir todos los validadores
+  (`src/validators/*.js`) y sus mensajes de error, y a revalidar las 10 suites
+  de jest. Aplicarlo aquí **rompería compatibilidad**; se pospone a un bloque
+  propio con aprobación explícita.
+- **`qs` 6.16.0** (moderada) y la cadena de **jest** (bajas) se mantienen sin
+  corregir, por el mismo criterio de no cambiar nada más en este bloque.
 
 ## Backend (Python) — `pip-audit` 2.10.1
 
@@ -45,12 +68,15 @@ Dependencias analizadas: 384 (99 prod, 286 dev, 1 opcional).
   informe propone `jest` **25.1.0** con `isSemVerMajor: true`, es decir un
   *downgrade* incompatible con la suite actual. No se aplica.
 
-## Decisión del bloque
+## Estado tras el Bloque G
 
-Solo informe. No se ejecutó `npm audit fix`, no se subieron majors y no se
-editaron archivos de dependencias. Para un bloque posterior, con aprobación
-explícita, se puede evaluar por separado:
+| Paquete | Estado |
+|---|---|
+| `body-parser` 1.20.9 | **Corregido** en G (único cambio del lockfile). |
+| `zod` 3.25.76 | Diferido: requiere major 4.x y migración de validadores. |
+| `qs` 6.16.0 | Diferido (moderada, fuera de alcance). |
+| `jest` 29.7.0 y `deepmerge` | Diferidos (bajas; el informe propone un downgrade incompatible). |
 
-1. `body-parser` → 1.20.9 (corrección sin romper compatibilidad declarada).
-2. `zod` → 4.6.7 (requiere migración de validadores; requiere autorización).
-3. `qs` → revisar con `npm audit fix` en un entorno aislado.
+Para un bloque posterior, con aprobación explícita, se puede evaluar por
+separado la migración a `zod` 4.6.7 y la corrección de `qs`. No se ha usado
+`npm audit fix --force` en ningún momento.

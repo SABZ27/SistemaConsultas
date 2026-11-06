@@ -45,10 +45,10 @@ class UpdateUsuarioRequest(BaseModel):
 
 class UsuarioResponse(BaseModel):
     id: int
-    identificacion: str
+    identificacion: str | None
     nombre: str
     apellido: str
-    correo: str
+    correo: str | None
     rol: Rol
     programaId: int | None
     programaNombre: str | None
