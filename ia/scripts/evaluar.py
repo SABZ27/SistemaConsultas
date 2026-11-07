@@ -1,14 +1,20 @@
 """Envia las preguntas de ia/pruebas/preguntas.md a la API de Open WebUI.
 
-Comprueba palabras clave, muestra aciertos y tiempo por respuesta.
-Nunca imprime la OPENWEBUI_API_KEY. La comprobacion es estricta: TODAS las
-palabras clave del caso deben aparecer en la respuesta (sin tildes ni
-mayusculas). En la Fase 2 se amplia con los casos DATOS y la comparacion
-contra el endpoint directo de mcpo.
+Fase 1: 15 casos de DOCUMENTACION + 3 FUERA (coleccion de conocimiento).
+Fase 2: + 10 casos DATOS (tool_ids, sin files), con la herramienta esperada.
+
+Para los casos DATOS se intenta primero detectar la herramienta usada en el
+array "sources" que devuelve la API (Path B / legacy). Si la API no expone que
+herramienta se uso, se compara la respuesta con la LLAMADA DIRECTA al endpoint
+de mcpo (POST {MCPO_URL}/{HERRAMIENTA}) y se cuentan los valores coincidentes.
+
+Comprueba palabras clave, muestra aciertos y tiempo por respuesta. Nunca
+imprime la OPENWEBUI_API_KEY ni la MCPO_API_KEY.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import time
@@ -25,6 +31,9 @@ URL = os.environ.get("OPENWEBUI_URL", "http://localhost:3000").rstrip("/")
 CLAVE = os.environ.get("OPENWEBUI_API_KEY", "")
 MODELO = os.environ.get("OLLAMA_MODEL", "consultas-asistente")
 KNOWLEDGE_ID = os.environ.get("KNOWLEDGE_ID", "").strip()
+TOOL_IDS = [x.strip() for x in os.environ.get("OPENWEBUI_TOOL_IDS", "").split(",") if x.strip()]
+MCPO_URL = os.environ.get("MCPO_URL", "http://localhost:8000").rstrip("/")
+MCPO_CLAVE = os.environ.get("MCPO_API_KEY", "")
 ARCHIVO = RAIZ / "pruebas" / "preguntas.md"
 
 _PATRON_THINK_CERRADO = re.compile(r"<think\b[^>]*>.*?</think>", re.DOTALL | re.IGNORECASE)
@@ -49,6 +58,11 @@ def cargar_casos(ruta: Path) -> list[dict]:
         nonlocal actual
         if actual and actual.get("TIPO") and actual.get("PREGUNTA"):
             actual["CLAVES"] = [c.strip() for c in actual.get("CLAVES", "").split("|") if c.strip()]
+            if "ARGS" in actual:
+                try:
+                    actual["ARGS"] = json.loads(actual["ARGS"])
+                except (ValueError, TypeError):
+                    actual["ARGS"] = {}
             casos.append(actual)
         actual = None
 
@@ -68,17 +82,20 @@ def cargar_casos(ruta: Path) -> list[dict]:
     return casos
 
 
-def construir_cuerpo(caso: dict) -> dict | None:
-    """Fase 1: DOCUMENTACION y FUERA usan la coleccion de conocimiento."""
-    tipo = caso.get("TIPO", "").upper()
-    if tipo == "DATOS":
-        return None  # se implementa en la Fase 2
+def construir_cuerpo(caso: dict) -> dict:
+    """DOCUMENTACION/FUERA -> files=[collection]; DATOS -> tool_ids, sin files."""
     cuerpo = {
         "model": MODELO,
         "messages": [{"role": "user", "content": caso["PREGUNTA"]}],
         "stream": False,
-        "files": [{"type": "collection", "id": KNOWLEDGE_ID}],
     }
+    if caso.get("TIPO", "").upper() == "DATOS":
+        # Verificado: con stream=false, legacy ejecuta las herramientas en el
+        # servidor y devuelve la respuesta (y "sources") en el cuerpo.
+        cuerpo["tool_ids"] = TOOL_IDS
+        cuerpo["params"] = {"function_calling": "legacy"}
+    else:
+        cuerpo["files"] = [{"type": "collection", "id": KNOWLEDGE_ID}]
     return cuerpo
 
 
@@ -89,8 +106,79 @@ def extraer_contenido(datos: dict) -> str:
         return ""
 
 
-def comprobar(caso: dict, respuesta: str, datos: dict) -> tuple[bool, str]:
-    """Devuelve (acierto, detalle). La Fase 2 anade la verificacion de herramienta."""
+def extraer_valores(obj) -> set[str]:
+    """Escalares (normalizados) del JSON de mcpo, para comparar con la respuesta."""
+    salida: set[str] = set()
+
+    def recorrer(x):
+        if isinstance(x, dict):
+            for v in x.values():
+                recorrer(v)
+        elif isinstance(x, list):
+            for v in x:
+                recorrer(v)
+        elif isinstance(x, bool):
+            return
+        elif isinstance(x, (int, float)):
+            salida.add(normalizar(str(x)))
+        elif isinstance(x, str):
+            salida.add(normalizar(x))
+
+    recorrer(obj)
+    return {v for v in salida if v}
+
+
+def llamar_mcpo(herramienta: str, args: dict):
+    """Llamada directa al endpoint OpenAPI de mcpo.
+
+    NO VERIFICADO: mcpo 0.0.20 usa --api-key; aqui se envia como Bearer, que
+    es lo que Open WebUI usa para servidores OpenAPI. Si tu mcpo exige otra
+    cabecera, ajusta los headers de esta funcion.
+    """
+    r = requests.post(
+        MCPO_URL + "/" + herramienta,
+        headers={"Authorization": "Bearer " + MCPO_CLAVE, "Content-Type": "application/json"},
+        json=args if isinstance(args, dict) else {},
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def comprobar_datos(caso: dict, respuesta: str, datos: dict) -> tuple[bool | None, str]:
+    """Devuelve (acierto | None=NO VERIFICADO, detalle)."""
+    herramienta = caso.get("HERRAMIENTA", "")
+    normalizada = normalizar(respuesta)
+    claves = [normalizar(c) for c in caso.get("CLAVES", [])]
+    faltan = [c for c in claves if c and c not in normalizada]
+    if faltan:
+        return False, "faltan palabras clave: " + ", ".join(faltan)
+
+    # 1) La API (Path B) devuelve "sources" con los resultados de las
+    #    herramientas. Si ahi aparece la herramienta esperada, ya esta verificado.
+    fuentes = datos.get("sources") or []
+    if herramienta and herramienta.lower() in json.dumps(fuentes, ensure_ascii=False).lower():
+        return True, "herramienta detectada en sources: " + herramienta
+
+    # 2) La API no expone que herramienta se uso: comparar con mcpo directo.
+    try:
+        resultado = llamar_mcpo(herramienta, caso.get("ARGS") or {})
+    except Exception as exc:
+        return None, "mcpo no disponible (" + type(exc).__name__ + "): NO VERIFICADO"
+
+    valores = extraer_valores(resultado)
+    coincidencias = [v for v in valores if len(v) >= 3 and v in normalizada]
+    if coincidencias:
+        return True, (
+            f"sin tool-id en la API; mcpo: {len(coincidencias)} valor(es) "
+            f"coincidente(s) [{herramienta}]"
+        )
+    return False, f"sin tool-id en la API; la respuesta no coincide con mcpo [{herramienta}]"
+
+
+def comprobar(caso: dict, respuesta: str, datos: dict) -> tuple[bool | None, str]:
+    if caso.get("TIPO", "").upper() == "DATOS":
+        return comprobar_datos(caso, respuesta, datos)
     normalizada = normalizar(respuesta)
     claves = [normalizar(c) for c in caso.get("CLAVES", [])]
     faltan = [c for c in claves if c and c not in normalizada]
@@ -100,17 +188,14 @@ def comprobar(caso: dict, respuesta: str, datos: dict) -> tuple[bool, str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Evaluador de la base de conocimiento")
+    parser = argparse.ArgumentParser(description="Evaluador de conocimiento y de datos")
     parser.add_argument("--limite", type=int, default=0, help="Maximo de casos a enviar (0 = todos)")
-    parser.add_argument("--solo", default="", help="IDs separados por coma, p. ej. DOC-01,FUERA-02")
+    parser.add_argument("--solo", default="", help="IDs separados por coma, p. ej. DOC-01,DAT-03")
     parser.add_argument("--timeout", type=int, default=300, help="Timeout HTTP en segundos")
     args = parser.parse_args()
 
     if not CLAVE:
         print("ERROR: falta OPENWEBUI_API_KEY en el entorno (ia/.env).")
-        return 1
-    if not KNOWLEDGE_ID:
-        print("ERROR: falta KNOWLEDGE_ID en el entorno (ia/.env).")
         return 1
     if not ARCHIVO.exists():
         print("ERROR: no existe ia/pruebas/preguntas.md")
@@ -126,19 +211,30 @@ def main() -> int:
         print("No hay casos que evaluar.")
         return 1
 
+    hay_doc = any(c.get("TIPO", "").upper() != "DATOS" for c in casos)
+    hay_datos = any(c.get("TIPO", "").upper() == "DATOS" for c in casos)
+    if hay_doc and not KNOWLEDGE_ID:
+        print("ERROR: falta KNOWLEDGE_ID en el entorno (ia/.env).")
+        return 1
+    if hay_datos and not TOOL_IDS:
+        print("AVISO: falta OPENWEBUI_TOOL_IDS; los casos DATOS se omitiran.")
+
     cabeceras = {"Authorization": "Bearer " + CLAVE, "Content-Type": "application/json"}
-    print(f"Modelo: {MODELO} | Coleccion configurada | Casos: {len(casos)}")
-    print("-" * 78)
+    print(f"Modelo: {MODELO} | Casos: {len(casos)} (doc/knowledge + datos/tool_ids)")
+    print("-" * 92)
 
     aciertos = 0
-    tiempo_total = 0.0
     evaluados = 0
+    no_verificados = 0
+    tiempo_total = 0.0
 
     for caso in casos:
-        cuerpo = construir_cuerpo(caso)
-        if cuerpo is None:
-            print(f"{caso['ID']:<10} OMITIDO  (caso DATOS: se evalua en la Fase 2)")
+        tipo = caso.get("TIPO", "").upper()
+        if tipo == "DATOS" and not TOOL_IDS:
+            print(f"{caso['ID']:<10} OMITIDO  (falta OPENWEBUI_TOOL_IDS)")
             continue
+
+        cuerpo = construir_cuerpo(caso)
         inicio = time.perf_counter()
         try:
             r = requests.post(URL + "/api/chat/completions", headers=cabeceras,
@@ -152,19 +248,24 @@ def main() -> int:
             datos = r.json()
             respuesta = limpiar(extraer_contenido(datos))
             ok, detalle = comprobar(caso, respuesta, datos)
-            aciertos += int(ok)
-            marca = "ACIERTO" if ok else "FALLO"
+            if ok is None:
+                no_verificados += 1
+                marca = "NO VERIF"
+            else:
+                aciertos += int(ok)
+                marca = "ACIERTO" if ok else "FALLO"
             print(f"{caso['ID']:<10} {marca:<8} {transcurrido:6.2f} s  {detalle}")
-            if not ok:
+            if ok is False:
                 vista = respuesta.replace("\n", " ")[:160]
                 print(f"           respuesta: {vista}")
         except requests.RequestException as exc:
             print(f"{caso['ID']:<10} FALLO    {type(exc).__name__}")
 
-    print("-" * 78)
-    print(f"Aciertos: {aciertos}/{evaluados} casos evaluados ({len(casos)} casos en total)")
+    print("-" * 92)
+    print(f"Aciertos: {aciertos}/{evaluados} evaluados | NO VERIFICADOS: {no_verificados} | casos: {len(casos)}")
     if evaluados:
         print(f"Tiempo total: {tiempo_total:.2f} s | Promedio: {tiempo_total / evaluados:.2f} s")
+    print("Los casos DATOS dependen de los datos de demo existentes en la BD.")
     return 0
 
 

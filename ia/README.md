@@ -236,15 +236,86 @@ admite `documentacion` y `datos` para forzar la ruta.
 
 ---
 
-## 9. Fase 2 (siguiente commit)
+## 9. Fase 2 — consulta de datos de la BD (solo lectura)
 
-La consulta de datos de la BD (`ia/db/crear_rol_lectura.sql`,
-`ia/db/tools.yaml`, `ia/scripts/iniciar-herramientas.ps1`), el registro de la
-herramienta externa en Open WebUI, las reglas de datos del prompt y las 10
-preguntas de datos del evaluador **se documentan en el commit de la Fase 2**.
-Este README se ampliará ahí con las URL de registro: en **modo pip**
-`http://localhost:8000/openapi.json` y en **modo Docker**
-`http://host.docker.internal:8000/openapi.json` (**no** `localhost`).
+Archivos de esta fase: `ia/db/crear_rol_lectura.sql`, `ia/db/tools.yaml`,
+`ia/scripts/iniciar-herramientas.ps1`, y las actualizaciones de
+`ia/prompts/sistema.md`, `ia/scripts/evaluar.py` e `ia/pruebas/preguntas.md`.
+
+### 9.1 Rol y vistas (los ejecuta el responsable)
+
+1. **Revisa** `ia/db/crear_rol_lectura.sql` y ejecútalo en Neon con la
+   contraseña como **variable de psql** (el archivo **no** la contiene):
+   ```
+   psql "<DSN_DE_NEON>" -v ON_ERROR_STOP=1 -v clave_ia_lectura='<CLAVE>' -f ia/db/crear_rol_lectura.sql
+   ```
+   Crea el rol `ia_lectura` (`NOLOGIN`-seguro, `CONNECTION LIMIT 3`,
+   `statement_timeout='15s'`), **6 vistas** `v_ia_*` sin contraseñas, tokens,
+   correos, identificaciones, nombre del estudiante ni descripción de la
+   consulta, y le otorga **solo `SELECT` sobre esas vistas**, con `REVOKE` del
+   esquema `public`, tablas, secuencias, funciones y privilegios por defecto.
+   Las vistas sí exponen nombres legibles de docente, módulo, programa, sede,
+   zona y recurso. El agente **no ejecuta este SQL ni se conecta a Neon**.
+
+### 9.2 Arrancar Toolbox + mcpo
+
+2. Coloca el binario de **MCP Toolbox for Databases** en
+   `ia/bin/toolbox.exe`. El repo **no lo descarga**.
+3. Crea el **venv propio de mcpo** (una sola vez, fuera del repo):
+   ```powershell
+   py -3.12 -m venv C:\dev\venv-mcpo
+   & 'C:\dev\venv-mcpo\Scripts\python.exe' -m pip install mcpo==0.0.20
+   ```
+4. Rellena en `ia/.env`: `NEON_HOST`, `NEON_PORT`, `NEON_DATABASE`,
+   `NEON_USER`, `NEON_PASSWORD`, `NEON_SSLMODE=require` y `MCPO_API_KEY`.
+5. Ejecuta
+   `powershell -ExecutionPolicy Bypass -File ia/scripts/iniciar-herramientas.ps1`.
+   Toolbox queda en `127.0.0.1:5000` (MCP HTTP) y mcpo en `127.0.0.1:8000`
+   (OpenAPI). Comprueba `http://localhost:8000/docs`.
+
+`ia/db/tools.yaml` define **6 herramientas parametrizadas** (placeholders
+`$1`) de solo lectura sobre las vistas: contar consultas por estado, próximas
+consultas de un docente por apellido, disponibilidad de un docente, recursos
+físicos por sede, promedio de calificación por docente y consultas por módulo.
+Las credenciales usan sustitución `${NEON_*}`. **SSL de Neon**: el source
+`postgres` admite `queryParams` (map que se añade a la URL de conexión pgx),
+así que se usa `sslmode: ${NEON_SSLMODE:require}`. Verificado contra el código
+del source de Toolbox; **NO VERIFICADO** contra Neon (no se conecta por regla
+del taller): confírmalo con el responsable. Si el pooler en modo transacción
+rechaza sentencias preparadas, hay una línea `queryExecMode: exec` comentada.
+
+### 9.3 Registro en Open WebUI (Herramientas externas / OpenAPI)
+
+6. En Open WebUI: **Settings > Admin > Tools** (o Workspace > Tools) añade un
+   **servidor de herramientas externo / OpenAPI** con:
+   - **MODO PIP**: URL `http://localhost:8000/openapi.json`
+   - **MODO DOCKER**: URL `http://host.docker.internal:8000/openapi.json`
+     (**NO `localhost`**: dentro del contenedor apuntaría al propio
+     contenedor, no a mcpo corriendo en Windows).
+   - Autenticación: la **api-key de mcpo** (`MCPO_API_KEY`), como Bearer.
+7. **Actívala en el modelo**: edita `consultas-asistente` (Workspace >
+   Models) y habilita sus Tools, o actívala en el chat. En la UI el modelo
+   debe usar **function calling nativo** para el bucle de herramientas.
+8. Obtén el **id** de la herramienta con
+   `GET {OPENWEBUI_URL}/api/v1/tools/` (Bearer `OPENWEBUI_API_KEY`) y ponlo en
+   `OPENWEBUI_TOOL_IDS` de `ia/.env` (separado por comas si son varios). El
+   campo `tool_ids` de `/api/chat/completions` está verificado; el formato
+   exacto del id que Open WebUI asigna a un servidor OpenAPI/mcpo es
+   **NO VERIFICADO**, por eso se lee de ese endpoint en cada instalación.
+9. El bot y `evaluar.py` envían `tool_ids` **sin** `files` y con
+   `params.function_calling="legacy"`: con `stream=false` es la forma
+   verificada de que Open WebUI **ejecute** las herramientas en el servidor y
+   devuelva la respuesta (y `sources`) en el cuerpo.
+
+### 9.4 Evaluación de datos
+
+10. `python ia/scripts/evaluar.py` (28 casos: 15 documentación, 3 fuera y 10
+    datos) o `python ia/scripts/evaluar.py --solo DAT-01,DAT-07`. Los casos
+    `DATOS` llevan la herramienta esperada y sus argumentos; si la API no
+    expone qué herramienta se usó (sin `sources`), el evaluador **compara la
+    respuesta con la llamada directa** a
+    `POST {MCPO_URL}/{HERRAMIENTA}` y reporta aciertos y coincidencias.
+    Los resultados dependen de los **datos de demo** existentes en la BD.
 
 ---
 
@@ -340,3 +411,34 @@ Opcional: `python ia/scripts/evaluar.py` mostrando aciertos y tiempos.
   servidor OpenAPI/mcpo: el campo `tool_ids` está verificado, pero el id se
   obtiene en cada instalación con `GET /api/v1/tools/` (Fase 2).
 - La integración end-to-end Ollama → Open WebUI → bot (no se arranca nada).
+
+### Fase 2
+
+**Verificado de forma estática**: `py_compile` de `evaluar.py`, parseo YAML de
+`ia/db/tools.yaml` (8 documentos: 1 `source`, 6 `tools`, 1 `toolset`),
+sintaxis de Windows PowerShell 5 de `iniciar-herramientas.ps1`, ASCII en los
+`.ps1` y coherencia de los nombres de tablas/columnas del SQL con
+`backend/app/models` y `docs/sql/01_postgres_schema.sql`.
+
+**Verificado contra documentación oficial (web)**:
+- Toolbox (`googleapis/mcp-toolbox`): formato plano `kind: source|tool|toolset`,
+  sustitución `${ENV}` y `${ENV:default}`, placeholders `$1`, flags
+  `--port`/`--stdio`/`--config`, `readOnly: true` y el campo `queryParams` del
+  source `postgres` (código de `internal/sources/postgres/postgres.go`,
+  función `BuildPostgresURL`, que lo añade a la URL de conexión pgx).
+- mcpo 0.0.20: `mcpo --port 8000 --api-key ... --server-type streamable-http
+  -- URL`, esquema en `/openapi.json` y UI en `/docs`.
+- Open WebUI: campo `tool_ids`, array `sources` en Path B y
+  `GET /api/v1/tools/` para listar ids.
+
+**NO VERIFICADO** (Fase 2; no se ejecuta nada ni se conecta a Neon):
+- El SQL contra Neon: no se ejecuta `psql` ni se crea el rol; lo revisa y
+  ejecuta el responsable.
+- Que `sslmode=require` sea el valor exacto que acepta el endpoint de Neon.
+- El formato exacto del id de herramienta que Open WebUI asigna al servidor
+  OpenAPI de mcpo (se obtiene de `GET /api/v1/tools/`).
+- La cabecera de autenticación que espera mcpo con `--api-key` (el evaluador
+  usa `Authorization: Bearer` y es ajustable).
+- La ruta del endpoint de mcpo por herramienta (`POST /{HERRAMIENTA}`) y la
+  integración end-to-end Toolbox → mcpo → Open WebUI.
+- Que las 6 herramientas devuelvan filas: depende de los datos de demo.

@@ -1,0 +1,144 @@
+# ia/db/tools.yaml — MCP Toolbox for Databases (googleapis/mcp-toolbox)
+# ============================================================================
+# Herramientas de SOLO LECTURA y parametrizadas ($1, $2...) sobre las vistas
+# v_ia_* creadas por ia/db/crear_rol_lectura.sql. Nunca se consultan tablas
+# base ni se exponen datos sensibles.
+#
+# CREDENCIALES: por sustitucion de variables de entorno de Toolbox, ${NOMBRE}
+# o ${NOMBRE:valor_por_defecto}. NINGUNA clave se escribe en este archivo.
+#
+# SSL de Neon: el source "postgres" admite "queryParams" (map[string]string
+# que se anade a la URL de conexion pgx, verificado en el codigo del source).
+# Neon exige SSL -> sslmode: ${NEON_SSLMODE:require}. NO VERIFICADO contra Neon
+# (por las reglas del taller no se conecta a la BD): confirmar con el responsable.
+#
+# Formato: YAML plano con documentos separados por --- (kind: source | tool |
+# toolset). Ejecutar: toolbox --config ia/db/tools.yaml --port 5000
+# ============================================================================
+
+kind: source
+name: consultas-neon
+type: postgres
+host: ${NEON_HOST}
+port: ${NEON_PORT:5432}
+database: ${NEON_DATABASE}
+user: ${NEON_USER}
+password: ${NEON_PASSWORD}
+queryParams:
+  sslmode: ${NEON_SSLMODE:require}
+  application_name: ia-lectura-toolbox
+connectTimeout: 10
+# Si el pooler de Neon en modo transaccion rechaza sentencias preparadas,
+# descomentar (NO VERIFICADO, depende del endpoint de Neon usado):
+# queryExecMode: exec
+---
+kind: tool
+name: contar_consultas_por_estado
+type: postgres-sql
+source: consultas-neon
+description: "Cuenta las consultas activas agrupadas por estado_consulta; admite filtrar por un estado exacto."
+statement: |
+  SELECT estado_consulta, COUNT(*) AS total
+  FROM v_ia_consultas
+  WHERE (NULLIF($1::text, '') IS NULL OR estado_consulta = $1::text)
+  GROUP BY estado_consulta
+  ORDER BY estado_consulta;
+parameters:
+  - name: estado
+    type: string
+    description: "Estado exacto (PENDIENTE, EN_PROCESO, RESUELTA, RECHAZADA, CANCELADA) o vacio para todos."
+---
+kind: tool
+name: proximas_consultas_docente
+type: postgres-sql
+source: consultas-neon
+description: "Proximas consultas de un docente, buscando por apellido (o parte del apellido)."
+statement: |
+  SELECT numero_consulta, estado_consulta, prioridad, fecha_consulta,
+         hora_consulta, docente_nombre, modulo_nombre, sede_nombre,
+         zona_nombre, recurso_nombre
+  FROM v_ia_consultas
+  WHERE docente_apellido ILIKE '%' || $1::text || '%'
+    AND fecha_consulta >= CURRENT_DATE
+  ORDER BY fecha_consulta, hora_consulta
+  LIMIT 20;
+parameters:
+  - name: apellido
+    type: string
+    description: "Apellido completo o parcial del docente, por ejemplo Vargas."
+---
+kind: tool
+name: disponibilidad_docente
+type: postgres-sql
+source: consultas-neon
+description: "Tramos de disponibilidad horaria de un docente, por apellido."
+statement: |
+  SELECT docente_nombre, dia_nombre, hora_inicio, hora_fin
+  FROM v_ia_disponibilidad
+  WHERE docente_apellido ILIKE '%' || $1::text || '%'
+  ORDER BY dia_semana, hora_inicio;
+parameters:
+  - name: apellido
+    type: string
+    description: "Apellido completo o parcial del docente."
+---
+kind: tool
+name: recursos_por_sede
+type: postgres-sql
+source: consultas-neon
+description: "Recursos fisicos activos de una sede, con su zona y tipo."
+statement: |
+  SELECT sede_nombre, zona_nombre, recurso_nombre, recurso_tipo
+  FROM v_ia_recursos
+  WHERE sede_nombre ILIKE '%' || $1::text || '%'
+  ORDER BY sede_nombre, zona_nombre, recurso_nombre;
+parameters:
+  - name: sede
+    type: string
+    description: "Nombre completo o parcial de la sede, por ejemplo Sede Central."
+---
+kind: tool
+name: promedio_calificacion_docente
+type: postgres-sql
+source: consultas-neon
+description: "Promedio de puntaje (1 a 5) y total de calificaciones de un docente, por apellido."
+statement: |
+  SELECT docente_nombre,
+         ROUND(AVG(puntaje)::numeric, 2) AS promedio,
+         COUNT(*) AS total_calificaciones
+  FROM v_ia_calificaciones
+  WHERE docente_apellido ILIKE '%' || $1::text || '%'
+  GROUP BY docente_nombre
+  ORDER BY docente_nombre;
+parameters:
+  - name: apellido
+    type: string
+    description: "Apellido completo o parcial del docente."
+---
+kind: tool
+name: consultas_por_modulo
+type: postgres-sql
+source: consultas-neon
+description: "Numero de consultas por asignatura/modulo, con cuantas estan resueltas y pendientes."
+statement: |
+  SELECT modulo_nombre, COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE estado_consulta = 'RESUELTA') AS resueltas,
+         COUNT(*) FILTER (WHERE estado_consulta = 'PENDIENTE') AS pendientes
+  FROM v_ia_consultas
+  WHERE (NULLIF($1::text, '') IS NULL OR modulo_nombre ILIKE '%' || $1::text || '%')
+  GROUP BY modulo_nombre
+  ORDER BY modulo_nombre;
+parameters:
+  - name: modulo
+    type: string
+    description: "Nombre completo o parcial de la asignatura, o vacio para todas."
+---
+kind: toolset
+name: consultas-lectura
+tools:
+  - contar_consultas_por_estado
+  - proximas_consultas_docente
+  - disponibilidad_docente
+  - recursos_por_sede
+  - promedio_calificacion_docente
+  - consultas_por_modulo

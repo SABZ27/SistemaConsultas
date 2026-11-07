@@ -144,3 +144,100 @@ PREGUNTA: Escribe un chiste sobre programadores y explica cómo funciona un moto
 CLAVES: No encuentro esa información en la documentación disponible.
 FUENTE: (ninguno)
 ESPERADO: Tema ajeno al sistema: debe responder exactamente la frase de "no encuentro".
+
+---
+
+Los casos siguientes pertenecen a la Fase 2. Se responden con las herramientas
+de solo lectura y se comparan con la llamada directa al endpoint de mcpo.
+HERRAMIENTA es la herramienta esperada y ARGS son sus argumentos en JSON.
+Los resultados dependen de los datos de demo que existan en la BD.
+
+## DAT-01
+TIPO: DATOS
+PREGUNTA: ¿Cuántas consultas hay en estado PENDIENTE?
+CLAVES: PENDIENTE
+HERRAMIENTA: contar_consultas_por_estado
+ARGS: {"estado": "PENDIENTE"}
+FUENTE: v_ia_consultas
+ESPERADO: El total de consultas activas en estado PENDIENTE.
+
+## DAT-02
+TIPO: DATOS
+PREGUNTA: ¿Cuántas consultas RESUELTAS hay en el sistema?
+CLAVES: RESUELTA
+HERRAMIENTA: contar_consultas_por_estado
+ARGS: {"estado": "RESUELTA"}
+FUENTE: v_ia_consultas
+ESPERADO: El total de consultas activas en estado RESUELTA.
+
+## DAT-03
+TIPO: DATOS
+PREGUNTA: Lista las próximas consultas del docente Vargas.
+CLAVES: Vargas
+HERRAMIENTA: proximas_consultas_docente
+ARGS: {"apellido": "Vargas"}
+FUENTE: v_ia_consultas
+ESPERADO: Consultas futuras del docente con apellido Vargas.
+
+## DAT-04
+TIPO: DATOS
+PREGUNTA: ¿Qué consultas próximas tiene el docente Moreno?
+CLAVES: Moreno
+HERRAMIENTA: proximas_consultas_docente
+ARGS: {"apellido": "Moreno"}
+FUENTE: v_ia_consultas
+ESPERADO: Consultas futuras del docente con apellido Moreno.
+
+## DAT-05
+TIPO: DATOS
+PREGUNTA: ¿Cuál es la disponibilidad horaria del docente Vargas?
+CLAVES: Vargas
+HERRAMIENTA: disponibilidad_docente
+ARGS: {"apellido": "Vargas"}
+FUENTE: v_ia_disponibilidad
+ESPERADO: Dias y tramos horarios del docente Vargas.
+
+## DAT-06
+TIPO: DATOS
+PREGUNTA: ¿Qué horarios tiene la docente Restrepo?
+CLAVES: Restrepo
+HERRAMIENTA: disponibilidad_docente
+ARGS: {"apellido": "Restrepo"}
+FUENTE: v_ia_disponibilidad
+ESPERADO: Dias y tramos horarios de la docente Restrepo.
+
+## DAT-07
+TIPO: DATOS
+PREGUNTA: ¿Qué recursos físicos hay en la Sede Central?
+CLAVES: Sede Central
+HERRAMIENTA: recursos_por_sede
+ARGS: {"sede": "Sede Central"}
+FUENTE: v_ia_recursos
+ESPERADO: Recursos de la Sede Central con su zona y tipo.
+
+## DAT-08
+TIPO: DATOS
+PREGUNTA: Lista los recursos de la Sede Norte.
+CLAVES: Sede Norte
+HERRAMIENTA: recursos_por_sede
+ARGS: {"sede": "Sede Norte"}
+FUENTE: v_ia_recursos
+ESPERADO: Recursos de la Sede Norte con su zona y tipo.
+
+## DAT-09
+TIPO: DATOS
+PREGUNTA: ¿Cuál es el promedio de calificación del docente Moreno?
+CLAVES: Moreno | promedio
+HERRAMIENTA: promedio_calificacion_docente
+ARGS: {"apellido": "Moreno"}
+FUENTE: v_ia_calificaciones
+ESPERADO: Promedio de puntaje y total de calificaciones del docente Moreno.
+
+## DAT-10
+TIPO: DATOS
+PREGUNTA: ¿Cuántas consultas hay por módulo?
+CLAVES: modulo
+HERRAMIENTA: consultas_por_modulo
+ARGS: {"modulo": ""}
+FUENTE: v_ia_consultas
+ESPERADO: Conteo de consultas agrupado por asignatura.
