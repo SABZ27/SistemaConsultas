@@ -1,0 +1,9 @@
+# Dependencias SOLO del bot de Telegram y de los scripts de ia/.
+# Open WebUI (0.13.0) y mcpo se instalan en sus PROPIOS venv, no aqui.
+# Versiones fijas verificadas contra PyPI el 2026-11-06.
+
+pyTelegramBotAPI==4.37.1
+requests==2.34.2
+PyYAML==6.0.3
+reportlab==5.1.0
+python-dotenv==1.2.4

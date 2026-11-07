@@ -1,0 +1,10 @@
+FROM qwen3:4b-instruct-2507-q4_K_M
+
+PARAMETER temperature 0.2
+PARAMETER top_p 0.8
+PARAMETER num_ctx 4096
+
+# El bloque SYSTEM NO se escribe aqui: ia/scripts/instalar-modelo.ps1 lo
+# inyecta desde ia/prompts/sistema.md al crear "consultas-asistente".
+# Asi el prompt tiene una unica fuente de verdad y se puede editar sin tocar
+# este archivo. No editar a mano.

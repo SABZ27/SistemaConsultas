@@ -1,0 +1,103 @@
+GLOSARIO DEL SISTEMA DE GESTION DE CONSULTAS ACADEMICAS
+========================================================
+
+consulta / solicitud de consulta
+    Registro de una asesoria academica pedida por un estudiante a un docente
+    para una asignatura. Tabla: solicitudes_consultas.
+
+estado_consulta
+    Maquina de estados de la consulta. Valores: PENDIENTE, EN_PROCESO,
+    RESUELTA, RECHAZADA, CANCELADA. Columna VARCHAR(50) en
+    solicitudes_consultas. No confundir con "estado".
+
+estado
+    Columna booleana de borrado logico presente en TODAS las 19 tablas de
+    PostgreSQL. true = activo, false = dado de baja. Los indices unicos
+    parciales usan WHERE estado = true.
+
+numero_consulta
+    Identificador SC-<anio>-<6 digitos>, por ejemplo SC-2026-000123. Unico.
+
+modulos
+    Asignaturas academicas. Aqui apuntan solicitudes_consultas.modulo_id y
+    docentes_modulos.modulo_id.
+
+modulos_sistema
+    Modulos funcionales de la interfaz y de los permisos (15 en la semilla).
+    Aqui apunta modulos_x_rol.modulo_id.
+
+claim "modulos"
+    Lista informativa de modulos activos del rol incluida en el JWT y en
+    GET /auth/me/modulos. La autorizacion real se consulta en base de datos
+    en cada peticion con requiere_modulo().
+
+GESTION_SOLICITUDES
+    Modulo que habilita la gestion global de consultas. En la semilla solo
+    lo tiene ADMINISTRADOR.
+
+prioridad
+    ALTA, MEDIA o BAJA (enum PrioridadSolicitud).
+
+calificacion
+    Entidad calificaciones_consulta: puntaje de 1 a 5 y comentario opcional
+    de hasta 500 caracteres. La crea SOLO el estudiante dueno y SOLO cuando
+    la consulta esta RESUELTA. Una por consulta, inmutable por API.
+
+comentario / retroalimentacion
+    Entidad comentarios de los participantes. Solo se crea y edita en estado
+    EN_PROCESO. "retroalimentacionDocente" es una cadena derivada: el
+    comentario activo mas reciente cuyo autor es el docente asignado.
+
+festivo (fail-closed)
+    Validacion obligatoria de la fecha contra Nager.Date (pais CO) al crear o
+    reprogramar. Si el servicio no responde, la operacion se rechaza con 503;
+    no se crea ni se reprograma sin validar. Si es festivo, 400 con el nombre.
+
+Ley Emiliani
+    Solo "Ascension Day" y "Corpus Christi" se trasladan al lunes siguiente
+    si no caen en lunes. Calculo en UTC. Ningun otro festivo se mueve.
+
+periodo academico vigente
+    Periodo con estado = true cuyo rango fecha_inicio..fecha_fin contiene la
+    fecha de la consulta. Condicion necesaria para crearla.
+
+disponibilidad_docente
+    Tramos horarios del docente: dia_semana 1 (Lunes) a 7 (Domingo), con
+    hora_inicio menor que hora_fin.
+
+sede / zona / recurso fisico
+    Jerarquia Sede -> Zona o Bloque -> Recurso fisico (SALON, LABORATORIO,
+    AUDITORIO, SALA, OFICINA). Tipos de estructura de sede: BLOQUES,
+    SALONES, PISOS.
+
+token SERVICIO
+    JWT interno de 5 minutos con rol SERVICIO y uid 0, firmado con el mismo
+    JWT_SECRET. Es el UNICO aceptado por POST /correos; un token de usuario
+    recibe 403. Los tokens de usuario con rol SERVICIO o uid 0 se rechazan en
+    endpoints de usuario.
+
+JWT de usuario
+    HS256, 30 minutos (JWT_EXPIRATION_MINUTES). Claims: sub, uid, rol,
+    modulos, iat, exp.
+
+429 / Retry-After
+    Respuesta de los limitadores de intentos. Ventanas de 15 minutos para
+    login (5 por correo+IP, 15 por correo, 100 por IP; bloqueo de 15 min).
+
+bcrypt
+    Algoritmo de hash de contrasenas. Politica: 10 caracteres minimo, 72
+    bytes maximo, sin espacios, mayuscula + minuscula + numero + simbolo,
+    sin contrasenas comunes ni datos personales.
+
+Nager.Date / Brevo
+    Proveedores externos: festivos y correo transaccional (API HTTP),
+    centralizados en el microservicio Express.
+
+PostgreSQL (Neon) / MySQL (Aiven)
+    19 tablas del dominio de negocio / 4 tablas de servicios externos
+    (servicios_externos, consultas_servicio_externo, festivos,
+    correos_enviados).
+
+borrado logico
+    Ninguna entidad relevante se elimina con DELETE fisico: se marca
+    estado = false para conservar trazabilidad e integridad historica.

@@ -1,0 +1,6 @@
+# Los PDF son binarios: sin conversion de fin de linea (core.autocrlf de Windows
+# los corromperia al hacer checkout, cambiando los offsets del xref).
+*.pdf binary
+
+# Scripts de Windows PowerShell 5: CRLF nativo, contenido ASCII (sin tildes).
+*.ps1 text eol=crlf

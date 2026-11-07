@@ -1,0 +1,24 @@
+# Secretos: solo los NOMBRES viven en .env.example. El .env real no se versiona.
+.env
+.env.*
+!.env.example
+
+# Binario que coloca el usuario (no se descarga desde este repo).
+bin/
+
+# Datos locales, temporales y resultados de evaluacion.
+data/
+*.log
+resultados/
+salidas/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Windows
+Thumbs.db
+Desktop.ini
