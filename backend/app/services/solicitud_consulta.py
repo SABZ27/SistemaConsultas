@@ -316,32 +316,28 @@ class SolicitudConsultaService:
         """Valida la fecha contra el servicio de festivos del microservicio.
 
         Si la fecha es festiva se rechaza con 400. Si el servicio no responde
-        (red, timeout, 5xx o respuesta inválida) se rechaza con 503
-        (fail-closed): no se crea ni se reprograma sin validar la fecha. El
-        aviso del log lleva la fecha, el tipo de error y el código HTTP si lo
-        hay, sin nombres, correos ni identificadores.
+        (red, timeout, 5xx o respuesta inválida), se registra advertencia en
+        logs y se continúa con la creación/reprogramación para no bloquear el
+        registro en la base de datos PostgreSQL cuando el microservicio de
+        infraestructura externo no está en ejecución.
         """
         try:
             respuesta = self.cliente_externos.validar_festivo(fecha, token)
-        except Exception as error:  # fail-closed: no se opera sin validar
+            if respuesta.get("esFestivo"):
+                raise BadRequestException(
+                    f"La fecha seleccionada es festivo: {respuesta.get('nombre') or 'Festivo'}"
+                )
+        except BadRequestException:
+            raise
+        except Exception as error:
             codigo_http = getattr(error, "codigo_http", None)
             logger.warning(
-                "No se pudo validar el carácter festivo de la fecha %s: %s%s",
+                "No se pudo consultar el microservicio de festivos para la fecha %s (%s%s). "
+                "Permitiendo registro en base de datos.",
                 fecha.isoformat(),
                 getattr(error, "causa", None) or type(error).__name__,
                 f" (HTTP {codigo_http})" if codigo_http is not None else "",
             )
-            raise ServiceUnavailableException(
-                "No se pudo validar la fecha en este momento. "
-                "Intenta de nuevo en un minuto"
-            ) from error
-
-        if not respuesta.get("esFestivo"):
-            return
-
-        raise BadRequestException(
-            f"La fecha seleccionada es festivo: {respuesta.get('nombre') or 'Festivo'}"
-        )
 
     def _validar_docente_asignado(self, id_docente: int, id_modulo: int) -> None:
         if not self.docente_modulo_repo.existe_asignacion(id_docente, id_modulo):
