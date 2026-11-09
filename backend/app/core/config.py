@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 JWT_SECRET_MINIMO = 32
 JWT_SECRET_EJEMPLO = "REEMPLAZAR_POR_UN_SECRET_DE_AL_MENOS_32_CARACTERES"
-CORS_ORIGINS_EJEMPLO = "http://localhost:5173,http://localhost:3000"
+CORS_ORIGINS_EJEMPLO = "http://localhost:5173,http://localhost:3000,http://localhost:4200,http://127.0.0.1:4200"
 
 
 class Settings(BaseSettings):
