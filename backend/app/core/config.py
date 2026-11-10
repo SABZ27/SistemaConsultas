@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 JWT_SECRET_MINIMO = 32
 JWT_SECRET_EJEMPLO = "REEMPLAZAR_POR_UN_SECRET_DE_AL_MENOS_32_CARACTERES"
-CORS_ORIGINS_EJEMPLO = "http://localhost:5173,http://localhost:3000"
+CORS_ORIGINS_EJEMPLO = "http://localhost:4200,http://localhost:5173,http://localhost:3000,https://consultasiub-xgkt.onrender.com"
 
 
 class Settings(BaseSettings):
@@ -79,8 +79,12 @@ def origenes_cors(cadena: str) -> list[str]:
     origenes: list[str] = []
     for origen in cadena.split(","):
         limpio = origen.strip().rstrip("/")
-        if limpio:
+        if limpio and limpio not in origenes:
             origenes.append(limpio)
+
+    for obligatorio in ("http://localhost:4200", "https://consultasiub-xgkt.onrender.com"):
+        if obligatorio not in origenes:
+            origenes.append(obligatorio)
 
     if not origenes:
         raise RuntimeError("CORS_ORIGINS debe definir al menos un origen.")

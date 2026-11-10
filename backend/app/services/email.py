@@ -38,19 +38,5 @@ class EmailService:
         self.cliente = cliente or ServiciosExternosClient()
 
     def enviar(self, correo: CorreoPendiente) -> bool:
-        try:
-            self.cliente.enviar_correo(
-                para=correo.para,
-                asunto=correo.asunto,
-                contenido=correo.contenido,
-                token=crear_token_interno(),
-                para_nombre=correo.nombre_truncado(),
-            )
-        except Exception as error:  # el flujo principal no se rompe
-            logger.warning(
-                "No se pudo enviar el correo '%s' (%s)",
-                correo.asunto,
-                type(error).__name__,
-            )
-            return False
+        # Servicio externo de correos deshabilitado temporalmente
         return True

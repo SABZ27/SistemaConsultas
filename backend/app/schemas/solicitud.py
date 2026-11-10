@@ -15,6 +15,7 @@ class RegistroSolicitudConsultaRequest(BaseModel):
     horaConsulta: time
     docenteId: int
     moduloId: int
+    estudianteId: int | None = None
 
 
 class UpdateSolicitudConsultaRequest(BaseModel):

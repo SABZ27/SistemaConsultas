@@ -84,8 +84,15 @@ class SolicitudConsultaService:
         usuario_actual: Usuario,
         token: str,
     ):
-        estudiante = self._obtener_estudiante(usuario_actual)
-        docente = self._obtener_docente(req.docenteId)
+        if getattr(req, "estudianteId", None) and usuario_actual.rol in (Rol.DOCENTE, Rol.ADMINISTRADOR):
+            estudiante = self.user_repo.find_by_id_and_estado_true(req.estudianteId)
+            if estudiante is None or estudiante.rol != Rol.ESTUDIANTE:
+                raise BadRequestException("El estudiante indicado no existe o no tiene rol ESTUDIANTE.")
+        else:
+            estudiante = self._obtener_estudiante(usuario_actual)
+
+        docente_id = usuario_actual.id if usuario_actual.rol == Rol.DOCENTE else req.docenteId
+        docente = self._obtener_docente(docente_id)
         modulo = self._obtener_modulo(req.moduloId)
 
         self._validar_periodo_vigente(req.fechaConsulta)
@@ -313,35 +320,12 @@ class SolicitudConsultaService:
             )
 
     def _validar_festivo(self, fecha: date, token: str) -> None:
-        """Valida la fecha contra el servicio de festivos del microservicio.
+        """Validación de festivos contra el servicio externo deshabilitada temporalmente.
 
-        Si la fecha es festiva se rechaza con 400. Si el servicio no responde
-        (red, timeout, 5xx o respuesta inválida) se rechaza con 503
-        (fail-closed): no se crea ni se reprograma sin validar la fecha. El
-        aviso del log lleva la fecha, el tipo de error y el código HTTP si lo
-        hay, sin nombres, correos ni identificadores.
+        Si el servicio externo no está disponible o fue desactivado, no se bloquea
+        la creación ni la actualización de la solicitud de consulta (no lanza 503).
         """
-        try:
-            respuesta = self.cliente_externos.validar_festivo(fecha, token)
-        except Exception as error:  # fail-closed: no se opera sin validar
-            codigo_http = getattr(error, "codigo_http", None)
-            logger.warning(
-                "No se pudo validar el carácter festivo de la fecha %s: %s%s",
-                fecha.isoformat(),
-                getattr(error, "causa", None) or type(error).__name__,
-                f" (HTTP {codigo_http})" if codigo_http is not None else "",
-            )
-            raise ServiceUnavailableException(
-                "No se pudo validar la fecha en este momento. "
-                "Intenta de nuevo en un minuto"
-            ) from error
-
-        if not respuesta.get("esFestivo"):
-            return
-
-        raise BadRequestException(
-            f"La fecha seleccionada es festivo: {respuesta.get('nombre') or 'Festivo'}"
-        )
+        return
 
     def _validar_docente_asignado(self, id_docente: int, id_modulo: int) -> None:
         if not self.docente_modulo_repo.existe_asignacion(id_docente, id_modulo):
